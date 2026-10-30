@@ -204,6 +204,8 @@
     '.lv-fab{display:inline-flex;align-items:center;gap:.4em;font-size:clamp(15px,1.4vw,21px);white-space:nowrap;flex:0 0 auto}',
     '.lv-fab.float{position:fixed;right:12px;bottom:12px;z-index:30;background:var(--lv-p1);border:1px solid var(--lv-line);border-radius:999px;padding:.3em .4em;box-shadow:0 4px 18px #0008}',
     '.lv-fab .lv-btn{font-size:1em}',
+    '.lv-fab .lv-ping{animation:lvping 1s infinite}',
+    '@keyframes lvping{0%,100%{box-shadow:0 0 0 0 var(--lv-ac)}50%{box-shadow:0 0 0 .35em transparent}}',
     '.lv-bar{display:flex;align-items:center;gap:.5em;padding:.45em .7em;border-bottom:1px solid var(--lv-line);background:var(--lv-p1);font-size:clamp(14px,1.3vmin + 8px,24px);white-space:nowrap;min-width:0}',
     '.lv-title{font-weight:700;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}',
     '.lv-btn{font:inherit;font-weight:600;color:var(--lv-fg);background:var(--lv-p2);border:1px solid var(--lv-line);border-radius:.6em;padding:.35em .8em;cursor:pointer;white-space:nowrap;line-height:1.2}',
@@ -371,7 +373,7 @@
     var net = null, sign = null, status = 'off', seen = {}, stagger = 0;
 
     function fresh() {
-      return { code: code6(), keys: null, cur: 0, open: false, reveal: {}, veil: false, showMeta: false, answers: {}, seq: Date.now(), started: Date.now() };
+      return { go: { p: 0, s: 0 }, code: code6(), keys: null, cur: 0, open: false, reveal: {}, veil: false, showMeta: false, answers: {}, seq: Date.now(), started: Date.now() };
     }
     if (!S || !S.code) S = fresh();
     function save() { LS.set(KEY, S); }
@@ -389,6 +391,15 @@
       if (on) renderAll();
     }
     function panelOn() { return !root.classList.contains('lv-hide'); }
+    // 학생들 시뮬레이션을 선생님이 보고 있는 쪽으로 옮기기 (그 뒤엔 학생이 자유롭게 넘겨 볼 수 있음)
+    function pushPage() {
+      if (!net) { toast('먼저 서버에 연결해 주세요'); return; }
+      var pg = lesson.pageOf ? lesson.pageOf() : 0;
+      S.go = { p: pg, s: ((S.go && S.go.s) || 0) + 1 }; save(); sendState();
+      toast('학생 화면을 ' + (pg + 1) + '쪽으로 옮겼어요');
+    }
+    // 수업 페이지(시뮬레이션)의 키보드 단축키가 실시간 창에서 눌린 키에 반응하지 않게
+    root.addEventListener('keydown', function (e) { e.stopPropagation(); });
 
     /* 위쪽 막대 */
     var dot = h('span', { class: 'lv-dot' });
@@ -404,6 +415,7 @@
       h('button', { class: 'lv-btn', text: 'CSV 저장', onclick: csv }),
       h('button', { class: 'lv-btn lv-icon', title: '설정', text: '⚙', onclick: function () { showCfg(true); } }),
       fsButton(),
+      embed && lesson.studentSim ? h('button', { class: 'lv-btn', text: '👀 학생도 이 쪽', title: '학생들 시뮬레이션을 지금 쪽으로 옮기기', onclick: pushPage }) : null,
       embed ? h('button', { class: 'lv-btn pri', text: (lesson.backLabel || '수업 화면') + ' ✕', title: '실시간 창 닫기', onclick: function () { panel(false); } }) : null
     ]);
 
@@ -412,6 +424,7 @@
     if (embed) {
       var fab = h('span', { class: 'lv-fab' }, [
         h('button', { class: 'lv-btn', title: 'QR 크게 보기', onclick: function () { if (!cfg) showCfg(true); else showQR(true); } }, [fabDot, ' 👥', fabCnt, ' · ', fabCode]),
+        lesson.studentSim ? h('button', { class: 'lv-btn', text: '👀 학생도 이 쪽', title: '학생들 시뮬레이션을 지금 쪽으로 옮기기', onclick: pushPage }) : null,
         h('button', { class: 'lv-btn pri', text: '📡 질문', title: '실시간 질문 창 열기', onclick: function () { panel(true); } })
       ]);
       var host = lesson.mountBefore && $(lesson.mountBefore);   // 이 요소 바로 앞에 단추를 넣어요
@@ -597,7 +610,7 @@
       var it = curItem();
       S.seq = Math.max(S.seq + 1, Date.now()); save();
       var d = {
-        seq: S.seq, title: lesson.title || '', total: items.length,
+        seq: S.seq, title: lesson.title || '', total: items.length, go: S.go || null,
         cur: it ? { qid: it.qid, n: S.cur + 1, type: it.type, q: it.q, img: it.img, options: it.options || null, open: !!S.open, ans: S.reveal[it.qid] ? it.answer : null } : null
       };
       var str = JSON.stringify(d);
@@ -830,7 +843,12 @@
    *  학생 화면
    * ══════════════════════════════════════════ */
   function Student(lesson, q) {
-    var root = boot(lesson && lesson.title, { full: true, hideHost: true, colors: lesson && lesson.colors });
+    lesson = lesson || {};
+    var sim = !!lesson.studentSim;   // 학생도 수업 페이지(시뮬레이션)를 직접 조작
+    var root = boot(lesson.title, { full: !sim, hideHost: !sim, colors: lesson.colors });
+    root.addEventListener('keydown', function (e) { e.stopPropagation(); });
+    function overlay(on) { if (sim) { root.classList.toggle('lv-hide', !on); fabQ && fabQ.classList.remove('lv-ping'); if (!on) ping(); } }
+    function overlayOn() { return !root.classList.contains('lv-hide'); }
     var sid = SS.get('lv-sid', null);
     if (!sid) { sid = rand(10); SS.set('lv-sid', sid); }
     var me = LS.get('lv-me', { c: '', n: '' });
@@ -843,12 +861,26 @@
     var titleEl = h('div', { class: 'lv-title', text: (lesson && lesson.title) || '실시간 수업' });
     var dot = h('span', { class: 'lv-dot' });
     var codeChip = h('span', { class: 'lv-chip' }, [dot, ' ', h('span', { class: 'lv-code', text: code || '------' })]);
-    root.appendChild(h('div', { class: 'lv-bar' }, [titleEl, codeChip, fsButton()]));
+    root.appendChild(h('div', { class: 'lv-bar' }, [titleEl, codeChip, fsButton(),
+      sim ? h('button', { class: 'lv-btn pri', text: (lesson.backLabel || '수업 화면') + ' ✕', onclick: function () { overlay(false); } }) : null]));
+    var fabQ = null, fabDot = h('span', { class: 'lv-dot' });
+    if (sim) {
+      fabQ = h('button', { class: 'lv-btn pri', text: '📡 질문', title: '선생님 질문 보기', onclick: function () { overlay(true); } });
+      var fab = h('span', { class: 'lv-fab' }, [h('span', { class: 'lv-chip' }, [fabDot, ' ', code || '------']), fabQ]);
+      var host = lesson.mountBefore && $(lesson.mountBefore);
+      if (host) host.parentNode.insertBefore(fab, host); else { fab.classList.add('float'); document.body.appendChild(fab); }
+    }
+    // 답해야 할 질문이 열려 있는데 시뮬레이션을 보고 있으면 단추를 깜빡이기
+    function ping() {
+      if (!fabQ) return;
+      var c = state && state.cur;
+      fabQ.classList.toggle('lv-ping', !!(c && c.open && !myAns[c.qid] && !overlayOn()));
+    }
     var body = h('div', { class: 'lv-s' });
     root.appendChild(body);
     root.appendChild(h('div', { class: 'lv-copy', text: COPY }));
 
-    var net = null, verify = null, lastSeq = 0, state = null, gotState = false, myAns = SS.get('lv-my:' + code, {}), pending = null, hiTimer = null;
+    var net = null, verify = null, lastSeq = 0, lastGo = 0, popped = '', state = null, gotState = false, myAns = SS.get('lv-my:' + code, {}), pending = null, hiTimer = null;
 
     function screen(kids) { body.innerHTML = ''; kids.forEach(function (k) { if (k) body.appendChild(k); }); }
 
@@ -906,7 +938,7 @@
       hiTimer = setTimeout(hello, gotState ? 15000 : 2000);
     }
     function setStatus(st) {
-      dot.className = 'lv-dot ' + st;
+      dot.className = fabDot.className = 'lv-dot ' + st;
       if (st === 'ok') { gotState = false; hello(); if (!state) waiting('선생님을 기다리는 중', '선생님 화면과 연결하고 있어요'); }
     }
     function onMsg(m) {
@@ -922,6 +954,12 @@
           var changed = !state || !state.cur || !d.cur || state.cur.qid !== d.cur.qid || state.cur.open !== d.cur.open || state.cur.ans !== d.cur.ans;
           state = d;
           if (changed) render();
+          if (sim && d.go && d.go.s > lastGo) {            // 선생님이 "학생도 이 쪽"을 눌렀어요
+            lastGo = d.go.s;
+            try { lesson.goPage && lesson.goPage(d.go.p); } catch (e) {}
+            if (!(d.cur && d.cur.open && !myAns[d.cur.qid])) overlay(false);
+          }
+          ping();
         });
       } else if ((m.t === 'ack' || m.t === 'nack') && m.sid === sid) {
         if (!pending || pending.qid !== m.qid) return;
@@ -931,7 +969,8 @@
       }
     }
 
-    function waiting(msg, sub) {
+    function waiting(msg, sub, idle) {
+      if (idle && sim) overlay(false);                    // 기다리는 동안엔 시뮬레이션을 하도록
       screen([h('div', { class: 'center' }, [h('div', { class: 'pulse' }), h('div', { class: 'lv-msg', text: msg }), sub ? h('div', { class: 'lv-sb', text: sub }) : null])]);
     }
     var statEl = null;
@@ -954,9 +993,12 @@
 
     function render() {
       var c = state && state.cur;
-      if (!c) return waiting('선생님을 기다리는 중', '선생님이 문항을 열면 여기에 나타나요');
+      var idleSub = sim ? '선생님이 질문을 열면 위로 떠올라요' : '선생님이 문항을 열면 여기에 나타나요';
+      if (!c) return waiting('선생님을 기다리는 중', idleSub, true);
       var mine = myAns[c.qid];
-      if (!c.open && !mine && c.ans == null) return waiting('선생님을 기다리는 중', '선생님이 문항을 열면 여기에 나타나요');
+      if (!c.open && !mine && c.ans == null) return waiting('선생님을 기다리는 중', idleSub, true);
+      var key = c.qid + (c.open ? ':open' : ':closed') + (c.ans != null ? ':ans' : '');
+      if (sim && key !== popped && (c.open || c.ans != null)) { popped = key; overlay(true); }
       statEl = h('div', { class: 'lv-stat' });
       var head = h('div', { class: 'lv-q' }, [h('small', { text: c.n + '번 문항' + (c.open ? '' : ' · 마감') }), c.q]);
       var img = c.img ? h('img', { class: 'qimg', src: c.img, alt: '' }) : null;

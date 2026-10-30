@@ -803,8 +803,9 @@ function fsEl(){return document.fullscreenElement||document.webkitFullscreenElem
 fsb.onclick=function(){var de=document.documentElement;if(fsEl()){(document.exitFullscreen||document.webkitExitFullscreen).call(document)}else{(de.requestFullscreen||de.webkitRequestFullscreen).call(de)}};
 function fsLabel(){fsb.textContent=fsEl()?'전체화면 끄기':'전체화면'}
 document.addEventListener('fullscreenchange',fsLabel);document.addEventListener('webkitfullscreenchange',fsLabel);
-// 학생 화면에서는 시뮬레이션을 돌리지 않아요(크롬북 부담 줄이기)
-if(!(window.Live&&Live.isStudent()))show(0);
+// 실시간 수업이 학생 화면의 쪽을 옮길 때 씀
+window.__simShow=show;
+show(0);
 })();
 </script>
 <!-- ───────── 실시간 수업 연결 (live.js) · Copyright 2026 엘레나 ───────── -->
@@ -820,6 +821,8 @@ Live.start({
   mountBefore: '#fs',
   backLabel: '시뮬레이션으로',
   pageOf: function () { return +document.body.getAttribute('data-page') || 0; },
+  studentSim: true,                                   // 학생도 시뮬레이션을 직접 해 봐요
+  goPage: function (n) { if (window.__simShow) window.__simShow(n); },
   colors: { bg: '#0B2545', p1: '#13315C', p2: '#1A3D6D', line: '#24497A', fg: '#F4F7FB', sub: '#A9BCD6', ac: '#FFE08A' },
   items: [
     { page: 0, type: 'choice', q: '여름과 겨울, 에펠탑의 키는 어떻게 다를까요?',
