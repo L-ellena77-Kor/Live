@@ -4,50 +4,150 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0d1117">
-<title>열평형 생각 모으기</title>
-<!-- Copyright 2026 엘레나 -->
-<style>html,body{background:#0d1117;margin:0}</style>
+<title>실시간 수업 목록</title>
+<!-- Copyright 2026 엘레나
+     저장소에 올린 수업 HTML 파일을 스스로 찾아 목록으로 보여 줍니다.
+     새 수업 파일을 올리기만 하면 여기에 저절로 나타나요. (이 파일은 고칠 필요 없음) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+:root{--bg:#0d1117;--p1:#161b23;--p2:#1f2630;--line:#2c3542;--fg:#eef3f8;--sub:#9aa7b6;--ac:#4cc2ff;--ok:#5ee08a;--bad:#ff6b7d}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);overflow:hidden;font-family:Pretendard,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",system-ui,sans-serif}
+#app{position:fixed;inset:0;display:flex;flex-direction:column;height:100dvh}
+.bar{display:flex;align-items:center;gap:.6em;padding:.5em .8em;background:var(--p1);border-bottom:1px solid var(--line);font-size:clamp(15px,1.4vmin + 8px,26px);white-space:nowrap}
+.bar h1{flex:1;margin:0;font-size:1.15em;overflow:hidden;text-overflow:ellipsis}
+.btn{font:inherit;font-weight:600;color:var(--fg);background:var(--p2);border:1px solid var(--line);border-radius:.6em;padding:.4em .9em;cursor:pointer;white-space:nowrap;text-decoration:none;display:inline-flex;align-items:center;gap:.3em}
+.btn:hover{border-color:var(--ac)}
+.btn.pri{background:var(--ac);border-color:var(--ac);color:#04131c}
+#list{flex:1;min-height:0;display:grid;gap:clamp(10px,1.6vmin,20px);padding:clamp(10px,2vmin,26px);overflow:auto;align-content:stretch}
+.card{display:flex;flex-direction:column;justify-content:center;gap:.4em;background:var(--p1);border:2px solid var(--line);border-radius:1.1em;padding:.8em 1.1em;color:var(--fg);text-decoration:none;min-height:0;overflow:hidden;transition:border-color .15s,transform .15s}
+.card:hover{border-color:var(--ac);transform:translateY(-2px)}
+.card .t{font-weight:800;line-height:1.25;word-break:keep-all;overflow:hidden}
+.card .f{color:var(--sub);font-size:clamp(12px,1.6vmin,20px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .tag{align-self:flex-start;font-size:clamp(12px,1.5vmin,18px);font-weight:700;color:#04131c;background:var(--ok);border-radius:999px;padding:.15em .7em}
+.card .tag.plain{background:var(--p2);color:var(--sub)}
+.msg{grid-column:1/-1;align-self:center;text-align:center;color:var(--sub);font-size:clamp(18px,3.4vmin,40px);line-height:1.6;word-break:keep-all}
+.msg b{color:var(--fg)}
+.copy{font-size:11px;color:#5d6876;text-align:right;padding:2px 10px}
+</style>
 </head>
 <body>
-<!-- (선택) 학교 공용 설정 파일. 비워 두면 선생님 화면의 ⚙ 설정을 씁니다 -->
-<script src="live-config.js?v=1.1.0"></script>
-<script src="live.js?v=1.1.0"></script>
+<div id="app">
+  <div class="bar">
+    <h1>📚 실시간 수업 목록</h1>
+    <a class="btn pri" href="maker.html">＋ 퀴즈 만들기</a>
+    <button class="btn" id="reload" title="목록 다시 찾기">⟳</button>
+    <button class="btn" id="fs" title="전체화면">⛶</button>
+  </div>
+  <div id="list"><div class="msg">수업을 찾는 중…</div></div>
+  <div class="copy">Copyright 2026 엘레나</div>
+</div>
 <script>
-/* ─────────────────────────────────────────────
- * 수업 문항은 여기만 고치면 됩니다.
- *  type:'choice' → 객관식 (options 최대 8개, answer는 0부터 센 정답 번호 · 없어도 됨)
- *  type:'text'   → 서술형 (최대 400자)
- *  img: 그림 주소(선택) — 같은 폴더의 그림 파일 이름을 적어도 돼요
- * ───────────────────────────────────────────── */
-var cups = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180">' +
-  '<rect width="320" height="180" fill="#0d1117"/>' +
-  '<path d="M30 40h90l-10 120H40z" fill="none" stroke="#cfd8e3" stroke-width="4"/>' +
-  '<path d="M36 80h78l-6 76H42z" fill="#ff6b5b"/>' +
-  '<text x="75" y="125" fill="#fff" font-size="22" font-weight="700" text-anchor="middle">80℃</text>' +
-  '<path d="M200 40h90l-10 120h-70z" fill="none" stroke="#cfd8e3" stroke-width="4"/>' +
-  '<path d="M206 80h78l-6 76h-66z" fill="#4c9dff"/>' +
-  '<text x="245" y="125" fill="#fff" font-size="22" font-weight="700" text-anchor="middle">20℃</text>' +
-  '<text x="160" y="105" fill="#ffc24b" font-size="34" text-anchor="middle">+</text></svg>');
+(function () {
+  'use strict';
+  var HIDE = { 'index.html': 1, 'maker.html': 1 };   // 목록에 안 보일 파일 (이름이 _로 시작해도 숨김)
+  var CACHE = 'lv-list-v1', TTL = 10 * 60 * 1000;
+  var list = document.getElementById('list');
 
-Live.start({
-  id: 'heat-equilibrium-1',          // 수업마다 다르게 (답이 섞이지 않게)
-  title: '열평형 생각 모으기',
-  items: [
-    { type: 'choice', img: cups,
-      q: '80℃ 물과 20℃ 물을 섞고 오래 두면 두 물의 온도는 어떻게 될까요?',
-      options: ['80℃가 된다', '20℃가 된다', '두 온도 사이 어딘가에서 같아진다', '끝까지 서로 다르다'],
-      answer: 2 },
-    { type: 'choice',
-      q: '온도가 다른 두 물체가 닿아 있을 때, 열은 어느 쪽으로 이동할까요?',
-      options: ['온도가 높은 쪽 → 낮은 쪽', '온도가 낮은 쪽 → 높은 쪽', '양쪽으로 똑같이', '이동하지 않는다'],
-      answer: 0 },
-    { type: 'text',
-      q: '생활 속에서 열평형을 볼 수 있는 예를 하나 적어 보세요.' },
-    { type: 'text',
-      q: '오늘 수업에서 더 알고 싶어진 것이 있나요?' }
-  ]
-});
+  document.getElementById('fs').onclick = function () {
+    var d = document, r = d.documentElement;
+    if (!d.fullscreenElement && !d.webkitFullscreenElement) (r.requestFullscreen || r.webkitRequestFullscreen).call(r);
+    else (d.exitFullscreen || d.webkitExitFullscreen).call(d);
+  };
+  document.getElementById('reload').onclick = function () { try { sessionStorage.removeItem(CACHE); } catch (e) {} load(); };
+
+  // 주소에서 GitHub 계정과 저장소 이름 알아내기: https://계정.github.io/저장소/
+  function where() {
+    var m = /^([a-z0-9-]+)\.github\.io$/i.exec(location.hostname);
+    if (!m) return null;
+    var seg = location.pathname.split('/').filter(Boolean);
+    var repo = seg.length && !/\.html?$/i.test(seg[0]) ? seg[0] : m[1] + '.github.io';
+    return { owner: m[1], repo: repo };
+  }
+
+  // 큰 파일도 앞부분만 읽어서 <title>을 찾아요
+  function readTitle(name) {
+    return fetch(encodeURI(name), { cache: 'no-cache' }).then(function (r) {
+      if (!r.ok) throw 0;
+      if (!r.body || !r.body.getReader) return r.text().then(function (t) { return pick(t); });
+      var rd = r.body.getReader(), dec = new TextDecoder(), buf = '';
+      return (function step() {
+        return rd.read().then(function (x) {
+          if (!x.done) buf += dec.decode(x.value, { stream: true });
+          var got = /<\/title>/i.test(buf) && /live\.js/i.test(buf);
+          if (x.done || got || buf.length > 200000) { try { rd.cancel(); } catch (e) {} return pick(buf); }
+          return step();
+        });
+      })();
+    }).catch(function () { return { title: '', live: false }; });
+  }
+  function pick(t) {
+    var m = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(t);
+    var div = document.createElement('div'); div.innerHTML = m ? m[1] : '';
+    return { title: (div.textContent || '').trim(), live: /live\.js/i.test(t) };
+  }
+
+  function load() {
+    list.innerHTML = '<div class="msg">수업을 찾는 중…</div>';
+    var w = where();
+    if (!w) { msg('이 목록은 <b>GitHub Pages</b>에 올렸을 때 보여요.<br>지금 주소: ' + esc(location.host || '내 컴퓨터')); return; }
+    var c = null; try { c = JSON.parse(sessionStorage.getItem(CACHE)); } catch (e) {}
+    if (c && Date.now() - c.t < TTL) { draw(c.items); return; }
+    fetch('https://api.github.com/repos/' + w.owner + '/' + w.repo + '/contents/', { headers: { Accept: 'application/vnd.github+json' } })
+      .then(function (r) {
+        if (r.status === 403 || r.status === 429) throw new Error('limit');
+        if (!r.ok) throw new Error('http');
+        return r.json();
+      })
+      .then(function (files) {
+        var html = files.filter(function (f) { return f.type === 'file' && /\.html?$/i.test(f.name) && !HIDE[f.name.toLowerCase()] && f.name[0] !== '_'; });
+        return Promise.all(html.map(function (f) {
+          return readTitle(f.name).then(function (x) { return { file: f.name, title: x.title || f.name.replace(/\.html?$/i, ''), live: x.live }; });
+        }));
+      })
+      .then(function (items) {
+        items.sort(function (a, b) { return a.title.localeCompare(b.title, 'ko'); });
+        try { sessionStorage.setItem(CACHE, JSON.stringify({ t: Date.now(), items: items })); } catch (e) {}
+        draw(items);
+      })
+      .catch(function (e) {
+        msg(e && e.message === 'limit'
+          ? 'GitHub에 목록을 너무 자주 물어봐서 잠깐 막혔어요.<br>한 시간쯤 뒤에 ⟳을 눌러 주세요.<br><b>수업 파일 주소로 바로 들어가는 건 아무 문제 없어요.</b>'
+          : '목록을 불러오지 못했어요. 인터넷 연결을 확인하고 ⟳을 눌러 주세요.');
+      });
+  }
+
+  function msg(h) { list.style.gridTemplateColumns = '1fr'; list.style.gridAutoRows = ''; list.innerHTML = '<div class="msg">' + h + '</div>'; }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+  var last = [];
+  function draw(items) {
+    last = items;
+    if (!items.length) { msg('아직 수업 파일이 없어요.<br><b>＋ 퀴즈 만들기</b>로 만들어 저장소에 올려 보세요.'); return; }
+    list.innerHTML = '';
+    // 화면을 꽉 채우도록 칸 나누기
+    var W = list.clientWidth - 40, H = list.clientHeight - 40, n = items.length, best = { s: -1, c: 1, ch: 100 };
+    for (var c = 1; c <= n; c++) {
+      var r = Math.ceil(n / c), cw = W / c, ch = H / r, s = Math.min(cw / 2.2, ch);
+      if (s > best.s) best = { s: s, c: c, ch: ch, cw: cw };
+    }
+    var scroll = best.ch < 120;
+    list.style.gridTemplateColumns = scroll ? 'repeat(auto-fill,minmax(260px,1fr))' : 'repeat(' + best.c + ',1fr)';
+    list.style.gridAutoRows = scroll ? '130px' : '1fr';
+    var fsz = scroll ? 22 : Math.max(20, Math.min(72, best.ch * 0.22, best.cw * 0.08));
+    items.forEach(function (it) {
+      var a = document.createElement('a');
+      a.className = 'card'; a.href = it.file;
+      a.innerHTML = '<span class="tag' + (it.live ? '' : ' plain') + '">' + (it.live ? '📡 실시간' : '페이지') + '</span><div class="t"></div><div class="f"></div>';
+      a.querySelector('.t').textContent = it.title;
+      a.querySelector('.t').style.fontSize = fsz + 'px';
+      a.querySelector('.f').textContent = it.file;
+      list.appendChild(a);
+    });
+  }
+  var rz; window.addEventListener('resize', function () { clearTimeout(rz); rz = setTimeout(function () { if (last.length) draw(last); }, 150); });
+  load();
+})();
 </script>
 </body>
 </html>

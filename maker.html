@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0d1117">
+<title>퀴즈 만들기</title>
+<!-- Copyright 2026 엘레나
+     형성평가 문항을 입력하면 저장소에 올리기만 하면 되는 실시간 수업 파일(.html)을 만들어 줍니다.
+     입력한 내용과 그림은 이 컴퓨터 안에서만 처리되고 어디로도 보내지 않아요. -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<script src="live.js?v=1.1.0"></script><!-- 엔진 버전 번호만 읽어 와요 -->
+<style>
+:root{--bg:#0d1117;--p1:#161b23;--p2:#1f2630;--line:#2c3542;--fg:#eef3f8;--sub:#9aa7b6;--ac:#4cc2ff;--ok:#5ee08a;--bad:#ff6b7d;--warn:#ffc24b}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:Pretendard,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",system-ui,sans-serif}
+body{display:flex;flex-direction:column;height:100dvh;overflow:hidden;font-size:clamp(16px,1.2vmin + 9px,24px)}
+.bar{display:flex;align-items:center;gap:.5em;padding:.5em .8em;background:var(--p1);border-bottom:1px solid var(--line);white-space:nowrap}
+.bar h1{flex:1;margin:0;font-size:1.15em;overflow:hidden;text-overflow:ellipsis}
+.btn{font:inherit;font-weight:600;color:var(--fg);background:var(--p2);border:1px solid var(--line);border-radius:.6em;padding:.4em .9em;cursor:pointer;white-space:nowrap;text-decoration:none;display:inline-flex;align-items:center;gap:.3em;line-height:1.2}
+.btn:hover{border-color:var(--ac)}
+.btn.pri{background:var(--ac);border-color:var(--ac);color:#04131c}
+.btn.red{color:var(--bad)}
+.btn.sm{font-size:.82em;padding:.3em .6em}
+.btn:disabled{opacity:.35;cursor:default}
+main{flex:1;overflow:auto;padding:clamp(10px,2vmin,28px)}
+.wrap{max-width:1500px;margin:0 auto;display:flex;flex-direction:column;gap:1em}
+.head{display:grid;grid-template-columns:2fr 1fr;gap:1em}
+@media (max-width:760px){.head{grid-template-columns:1fr}}
+label.f{display:flex;flex-direction:column;gap:.3em;font-weight:700}
+label.f small{font-weight:400;color:var(--sub);font-size:.75em}
+.in{font:inherit;color:var(--fg);background:var(--p2);border:1px solid var(--line);border-radius:.6em;padding:.5em .7em;width:100%}
+.in:focus{outline:2px solid var(--ac);border-color:transparent}
+textarea.in{resize:vertical;min-height:3.2em;line-height:1.4}
+.fn{display:flex;align-items:center;gap:.3em}
+.fn span{color:var(--sub)}
+.q{background:var(--p1);border:1px solid var(--line);border-radius:1em;padding:1em;display:grid;grid-template-columns:auto 1fr;gap:.8em 1em}
+.q .no{font-size:1.6em;font-weight:900;color:var(--ac);text-align:center;min-width:1.6em}
+.q .tools{display:flex;flex-direction:column;gap:.35em;align-items:center}
+.q .body{display:flex;flex-direction:column;gap:.7em;min-width:0}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:.6em;overflow:hidden;align-self:flex-start}
+.seg button{font:inherit;font-weight:600;background:transparent;color:var(--sub);border:0;padding:.35em .9em;cursor:pointer}
+.seg button.on{background:var(--ac);color:#04131c}
+.row{display:flex;gap:.8em;align-items:flex-start}
+.row>.grow{flex:1;min-width:0}
+.img{width:clamp(110px,16vw,220px);display:flex;flex-direction:column;gap:.35em;align-items:stretch}
+.img .pv{aspect-ratio:4/3;border:2px dashed var(--line);border-radius:.6em;display:flex;align-items:center;justify-content:center;color:var(--sub);font-size:.8em;overflow:hidden;cursor:pointer;background:#0008;text-align:center;padding:.3em}
+.img .pv img{width:100%;height:100%;object-fit:contain}
+.opts{display:flex;flex-direction:column;gap:.45em}
+.opt{display:grid;grid-template-columns:auto auto 1fr auto;gap:.5em;align-items:center}
+.opt .mk{font-weight:800;width:1.4em;text-align:center}
+.opt input[type=radio]{width:1.3em;height:1.3em;accent-color:var(--ok);cursor:pointer;margin:0}
+.opt.right .in{border-color:var(--ok);background:#123a24}
+.hint{color:var(--sub);font-size:.8em;line-height:1.5}
+.err{color:var(--bad);font-weight:700}
+.foot{display:flex;flex-wrap:wrap;gap:.5em;align-items:center;padding:.6em .8em;background:var(--p1);border-top:1px solid var(--line)}
+.foot .sp{flex:1}
+.foot .big{font-size:1.1em;padding:.5em 1.2em}
+.empty{text-align:center;color:var(--sub);padding:3em 1em;border:2px dashed var(--line);border-radius:1em;line-height:1.7}
+.ov{position:fixed;inset:0;background:#000b;display:none;align-items:center;justify-content:center;z-index:9;padding:1em}
+.ov.on{display:flex}
+.box{background:var(--p1);border:1px solid var(--line);border-radius:1em;max-width:900px;width:100%;max-height:100%;overflow:auto;padding:1.2em 1.4em;display:flex;flex-direction:column;gap:.8em}
+.box h2{margin:0;font-size:1.4em}
+.box ol{margin:0;padding-left:1.4em;line-height:1.9}
+.box code{background:var(--p2);padding:.1em .4em;border-radius:.3em;color:var(--warn)}
+.copy{font-size:11px;color:#5d6876;text-align:right;padding:2px 10px}
+</style>
+</head>
+<body>
+<div class="bar">
+  <h1>📝 퀴즈 만들기</h1>
+  <a class="btn" href="index.html">📚 목록</a>
+  <button class="btn" id="open" title="이전에 만든 퀴즈 파일 고치기">📂 불러오기</button>
+  <button class="btn" id="new">새로 만들기</button>
+  <button class="btn" id="fs" title="전체화면">⛶</button>
+  <input type="file" id="openFile" accept=".html,.htm" hidden>
+  <input type="file" id="imgFile" accept="image/*" hidden>
+</div>
+<main><div class="wrap">
+  <div class="head">
+    <label class="f">수업 제목 <small>학생 화면과 목록에 보이는 이름</small><input class="in" id="title" placeholder="예: 보일 법칙 형성평가"></label>
+    <label class="f">파일 이름 <small>영어 소문자·숫자·- 만 (예: boyle-quiz)</small><span class="fn"><input class="in" id="file" placeholder="boyle-quiz" autocomplete="off" spellcheck="false"><span>.html</span></span></label>
+  </div>
+  <div id="qs"></div>
+  <p class="hint">✔ 고르기 문항은 보기 왼쪽의 동그라미로 정답을 고를 수 있어요(안 골라도 돼요). 그림은 이 컴퓨터에서 알맞게 줄여서 파일 안에 넣어요. 입력하는 동안 이 컴퓨터에 자동으로 임시 저장돼요.</p>
+</div></main>
+<div class="foot">
+  <button class="btn" id="addC">＋ 고르기 문항</button>
+  <button class="btn" id="addT">＋ 서술형 문항</button>
+  <span class="hint" id="count"></span>
+  <span class="sp"></span>
+  <span class="err" id="err"></span>
+  <button class="btn pri big" id="save">⬇ 수업 파일 만들기</button>
+</div>
+<div class="copy">Copyright 2026 엘레나</div>
+
+<div class="ov" id="done"><div class="box">
+  <h2>✅ <span id="doneName"></span> 파일을 만들었어요</h2>
+  <p class="hint" style="margin:0">방금 내려받은 파일을 GitHub 저장소에 올리면 끝이에요.</p>
+  <ol>
+    <li>GitHub 저장소 첫 화면에서 <b>Add file → Upload files</b></li>
+    <li>내려받기 폴더의 <code id="doneFile"></code> 파일을 끌어다 놓기</li>
+    <li>아래 <b>Commit changes</b> 누르기</li>
+    <li>1~2분 뒤 <b>📚 목록</b>에 저절로 나타나요</li>
+  </ol>
+  <p class="hint" style="margin:0">같은 이름으로 다시 올리면 예전 파일이 새 내용으로 바뀌어요. 고칠 때는 📂 불러오기로 이 파일을 열면 돼요.</p>
+  <div><button class="btn pri" id="doneOk">확인</button></div>
+</div></div>
+
+<script>
+(function () {
+  'use strict';
+  var KEY = 'lv-maker-draft';
+  var MARKS = ['①', '②', '③', '④', '⑤', '⑥'];
+  var $ = function (id) { return document.getElementById(id); };
+  var D = load() || blank();
+  var imgTarget = -1;
+
+  function blank() { return { title: '', file: '', items: [choice()] }; }
+  function choice() { return { type: 'choice', q: '', img: null, options: ['', '', '', ''], answer: null }; }
+  function text() { return { type: 'text', q: '', img: null }; }
+  function load() { try { return JSON.parse(localStorage.getItem(KEY)); } catch (e) { return null; } }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(D)); } catch (e) { $('err').textContent = '그림이 너무 많아 임시 저장을 못 했어요 (만들기는 돼요)'; } }
+
+  function el(tag, attrs, kids) {
+    var e = document.createElement(tag);
+    for (var k in attrs || {}) {
+      var v = attrs[k]; if (v == null || v === false) continue;
+      if (k === 'text') e.textContent = v; else if (k === 'class') e.className = v;
+      else if (k.slice(0, 2) === 'on') e.addEventListener(k.slice(2), v);
+      else if (k === 'value') e.value = v; else e.setAttribute(k, v === true ? '' : v);
+    }
+    (kids || []).forEach(function (c) { if (c != null) e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); });
+    return e;
+  }
+
+  $('title').value = D.title; $('file').value = D.file;
+  $('title').oninput = function () { D.title = this.value; save(); };
+  $('file').oninput = function () { D.file = this.value; save(); };
+
+  function render() {
+    var box = $('qs'); box.innerHTML = '';
+    if (!D.items.length) box.appendChild(el('div', { class: 'empty', text: '아래 ＋ 단추로 문항을 넣어 주세요' }));
+    D.items.forEach(function (it, i) { box.appendChild(card(it, i)); });
+    var nc = D.items.filter(function (x) { return x.type === 'choice'; }).length;
+    $('count').textContent = '문항 ' + D.items.length + '개 (고르기 ' + nc + ' · 서술형 ' + (D.items.length - nc) + ')';
+  }
+
+  function card(it, i) {
+    var n = D.items.length;
+    var tools = el('div', { class: 'tools' }, [
+      el('div', { class: 'no', text: String(i + 1) }),
+      el('button', { class: 'btn sm', title: '위로', text: '▲', disabled: i === 0, onclick: function () { move(i, -1); } }),
+      el('button', { class: 'btn sm', title: '아래로', text: '▼', disabled: i === n - 1, onclick: function () { move(i, 1); } }),
+      el('button', { class: 'btn sm', title: '복사', text: '⧉', onclick: function () { D.items.splice(i + 1, 0, JSON.parse(JSON.stringify(it))); save(); render(); } }),
+      el('button', { class: 'btn sm red', title: '지우기', text: '✕', onclick: function () { if (confirm((i + 1) + '번 문항을 지울까요?')) { D.items.splice(i, 1); save(); render(); } } })
+    ]);
+    var seg = el('div', { class: 'seg' }, [
+      el('button', { class: it.type === 'choice' ? 'on' : '', text: '고르기', onclick: function () { setType(i, 'choice'); } }),
+      el('button', { class: it.type === 'text' ? 'on' : '', text: '서술형', onclick: function () { setType(i, 'text'); } })
+    ]);
+    var q = el('textarea', { class: 'in', rows: '2', placeholder: '질문을 적어 주세요', value: it.q, oninput: function () { it.q = this.value; save(); } });
+    var pv = el('div', { class: 'pv', title: '그림 넣기', onclick: function () { imgTarget = i; $('imgFile').value = ''; $('imgFile').click(); } },
+      [it.img ? el('img', { src: it.img, alt: '' }) : '🖼 그림 넣기 (선택)']);
+    var img = el('div', { class: 'img' }, [pv, it.img ? el('button', { class: 'btn sm red', text: '그림 빼기', onclick: function () { it.img = null; save(); render(); } }) : null]);
+    var body = el('div', { class: 'body' }, [seg, el('div', { class: 'row' }, [el('div', { class: 'grow' }, [q]), img])]);
+    if (it.type === 'choice') {
+      var opts = el('div', { class: 'opts' });
+      it.options.forEach(function (o, k) {
+        opts.appendChild(el('div', { class: 'opt' + (it.answer === k ? ' right' : '') }, [
+          el('input', { type: 'radio', name: 'ans' + i, title: '정답으로 고르기', checked: it.answer === k, onclick: function () { it.answer = it.answer === k ? null : k; save(); render(); } }),
+          el('span', { class: 'mk', text: MARKS[k] }),
+          el('input', { class: 'in', placeholder: '보기 ' + (k + 1), value: o, oninput: function () { it.options[k] = this.value; save(); } }),
+          el('button', { class: 'btn sm red', title: '보기 지우기', text: '✕', disabled: it.options.length <= 2, onclick: function () {
+            it.options.splice(k, 1);
+            if (it.answer === k) it.answer = null; else if (it.answer > k) it.answer--;
+            save(); render();
+          } })
+        ]));
+      });
+      body.appendChild(opts);
+      body.appendChild(el('div', { class: 'row' }, [
+        el('button', { class: 'btn sm', text: '＋ 보기 추가', disabled: it.options.length >= 6, onclick: function () { it.options.push(''); save(); render(); } }),
+        el('span', { class: 'hint', text: it.answer == null ? '정답: 안 고름 (동그라미를 누르면 정답이 돼요)' : '정답: ' + MARKS[it.answer] })
+      ]));
+    } else {
+      body.appendChild(el('div', { class: 'hint', text: '학생이 400자까지 적어서 보내요. 선생님 화면에 카드로 모여요.' }));
+    }
+    return el('div', { class: 'q' }, [tools, body]);
+  }
+  function move(i, d) { var t = D.items[i]; D.items[i] = D.items[i + d]; D.items[i + d] = t; save(); render(); }
+  function setType(i, t) {
+    var it = D.items[i]; if (it.type === t) return;
+    D.items[i] = t === 'choice' ? Object.assign(choice(), { q: it.q, img: it.img }) : Object.assign(text(), { q: it.q, img: it.img });
+    save(); render();
+  }
+
+  $('addC').onclick = function () { D.items.push(choice()); save(); render(); setTimeout(function () { var m = document.querySelector('main'); m.scrollTop = m.scrollHeight; }, 30); };
+  $('addT').onclick = function () { D.items.push(text()); save(); render(); setTimeout(function () { var m = document.querySelector('main'); m.scrollTop = m.scrollHeight; }, 30); };
+  $('new').onclick = function () {
+    if (!confirm('지금 입력한 내용을 지우고 새로 만들까요?')) return;
+    D = blank(); $('title').value = ''; $('file').value = ''; save(); render();
+  };
+  $('fs').onclick = function () {
+    var d = document, r = d.documentElement;
+    if (!d.fullscreenElement && !d.webkitFullscreenElement) (r.requestFullscreen || r.webkitRequestFullscreen).call(r);
+    else (d.exitFullscreen || d.webkitExitFullscreen).call(d);
+  };
+
+  // 그림: 이 컴퓨터에서 긴 쪽 1280px로 줄여 파일 안에 넣어요 (어디로도 보내지 않음)
+  $('imgFile').onchange = function () {
+    var f = this.files[0]; if (!f || imgTarget < 0) return;
+    var it = D.items[imgTarget], url = URL.createObjectURL(f), im = new Image();
+    im.onload = function () {
+      var max = 1280, s = Math.min(1, max / Math.max(im.width, im.height));
+      var c = document.createElement('canvas'); c.width = Math.round(im.width * s); c.height = Math.round(im.height * s);
+      var g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(im, 0, 0, c.width, c.height);
+      it.img = c.toDataURL('image/jpeg', 0.82); URL.revokeObjectURL(url); save(); render();
+    };
+    im.onerror = function () { alert('그림을 열 수 없어요. 다른 그림 파일을 골라 주세요.'); };
+    im.src = url;
+  };
+
+  // 불러오기: 퀴즈 만들기로 만든 파일을 다시 열어 고치기
+  $('open').onclick = function () { $('openFile').value = ''; $('openFile').click(); };
+  $('openFile').onchange = function () {
+    var f = this.files[0]; if (!f) return;
+    f.text().then(function (t) {
+      var m = new RegExp('<' + 'script type="application/json" id="quiz-data">([\\s\\S]*?)<' + '/script>').exec(t);
+      if (!m) { alert('퀴즈 만들기로 만든 파일만 불러올 수 있어요.'); return; }
+      var d = JSON.parse(m[1]);
+      D = { title: d.title || '', file: d.id || f.name.replace(/\.html?$/i, ''), items: (d.items || []).map(function (x) {
+        return x.type === 'text' ? { type: 'text', q: x.q || '', img: x.img || null }
+          : { type: 'choice', q: x.q || '', img: x.img || null, options: (x.options || ['', '']).slice(0, 6), answer: typeof x.answer === 'number' ? x.answer : null };
+      }) };
+      $('title').value = D.title; $('file').value = D.file; save(); render();
+    }).catch(function () { alert('파일을 읽지 못했어요.'); });
+  };
+
+  // 수업 파일 만들기
+  $('save').onclick = function () {
+    var err = check(); $('err').textContent = err;
+    if (err) return;
+    var v = (window.Live && Live.version) || '1.1.0';
+    var data = {
+      id: D.file, title: D.title.trim(),
+      items: D.items.map(function (it, i) {
+        var o = { id: 'q' + (i + 1), type: it.type, q: it.q.trim() };
+        if (it.img) o.img = it.img;
+        if (it.type === 'choice') { o.options = it.options.map(function (s) { return s.trim(); }); if (it.answer != null) o.answer = it.answer; }
+        return o;
+      })
+    };
+    var json = JSON.stringify(data, null, 1).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+    var html = '<!doctype html>\n<html lang="ko">\n<head>\n<meta charset="utf-8">\n' +
+      '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n<meta name="theme-color" content="#0d1117">\n' +
+      '<title>' + esc(data.title) + '</title>\n<' + '!-- Copyright 2026 엘레나 · 퀴즈 만들기(maker.html)로 만든 파일 · 고칠 때는 퀴즈 만들기의 📂 불러오기를 쓰세요 -->\n' +
+      '<style>html,body{background:#0d1117;margin:0}</style>\n</head>\n<body>\n' +
+      '<' + 'script src="live-config.js?v=' + v + '"><' + '/script>\n<' + 'script src="live.js?v=' + v + '"><' + '/script>\n' +
+      '<' + 'script type="application/json" id="quiz-data">' + json + '<' + '/script>\n' +
+      '<' + 'script>Live.start(JSON.parse(document.getElementById(\'quiz-data\').textContent));<' + '/script>\n</body>\n</html>\n';
+    var a = el('a', { href: URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' })), download: D.file + '.html' });
+    document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+    $('doneName').textContent = data.title; $('doneFile').textContent = D.file + '.html';
+    $('done').classList.add('on');
+  };
+  $('doneOk').onclick = function () { $('done').classList.remove('on'); };
+
+  function check() {
+    D.file = D.file.trim().toLowerCase().replace(/\.html?$/, ''); $('file').value = D.file; save();
+    if (!D.title.trim()) return '수업 제목을 적어 주세요';
+    if (!/^[a-z0-9][a-z0-9-]{0,40}$/.test(D.file)) return '파일 이름은 영어 소문자·숫자·- 로 적어 주세요 (예: boyle-quiz)';
+    if (D.file === 'index' || D.file === 'maker') return '그 파일 이름은 쓸 수 없어요';
+    if (!D.items.length) return '문항을 하나 이상 넣어 주세요';
+    for (var i = 0; i < D.items.length; i++) {
+      var it = D.items[i];
+      if (!it.q.trim()) return (i + 1) + '번 질문을 적어 주세요';
+      if (it.type === 'choice') {
+        if (it.options.some(function (s) { return !s.trim(); })) return (i + 1) + '번에 빈 보기가 있어요 (✕로 지우거나 채워 주세요)';
+      }
+    }
+    return '';
+  }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+  render();
+})();
+</script>
+</body>
+</html>

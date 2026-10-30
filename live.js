@@ -1,5 +1,5 @@
 /*!
- * live.js — 나만의 실시간 수업 엔진 v1.0.0
+ * live.js — 나만의 실시간 수업 엔진 v1.1.0
  * Copyright 2026 엘레나
  *
  * 처음부터 새로 작성한 코드입니다.
@@ -30,7 +30,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '1.0.0';
+  var VERSION = '1.1.0';
   var COPY = 'Copyright 2026 엘레나';
   var SB_CDN = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
   var QR_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';
@@ -611,7 +611,7 @@
       S.seq = Math.max(S.seq + 1, Date.now()); save();
       var d = {
         seq: S.seq, title: lesson.title || '', total: items.length, go: S.go || null,
-        cur: it ? { qid: it.qid, n: S.cur + 1, type: it.type, q: it.q, img: it.img, options: it.options || null, open: !!S.open, ans: S.reveal[it.qid] ? it.answer : null } : null
+        cur: it ? { qid: it.qid, n: S.cur + 1, type: it.type, q: it.q, img: it.img && it.img.length < 2000 ? it.img : null, options: it.options || null, open: !!S.open, ans: S.reveal[it.qid] ? it.answer : null } : null
       };
       var str = JSON.stringify(d);
       (sign ? sign(str) : Promise.resolve(null)).then(function (sig) { net && net.send({ t: 'state', d: str, sig: sig }); });
@@ -844,6 +844,9 @@
    * ══════════════════════════════════════════ */
   function Student(lesson, q) {
     lesson = lesson || {};
+    // 그림은 서버로 보내지 않고, 학생 기기가 받은 수업 파일 안에서 꺼내 써요
+    var localItems = normItems(lesson.items);
+    function localImg(qid) { for (var i = 0; i < localItems.length; i++) if (localItems[i].qid === qid) return localItems[i].img; return null; }
     var sim = !!lesson.studentSim;   // 학생도 수업 페이지(시뮬레이션)를 직접 조작
     var root = boot(lesson.title, { full: !sim, hideHost: !sim, colors: lesson.colors });
     root.addEventListener('keydown', function (e) { e.stopPropagation(); });
@@ -1001,7 +1004,8 @@
       if (sim && key !== popped && (c.open || c.ans != null)) { popped = key; overlay(true); }
       statEl = h('div', { class: 'lv-stat' });
       var head = h('div', { class: 'lv-q' }, [h('small', { text: c.n + '번 문항' + (c.open ? '' : ' · 마감') }), c.q]);
-      var img = c.img ? h('img', { class: 'qimg', src: c.img, alt: '' }) : null;
+      var src = localImg(c.qid) || c.img;
+      var img = src ? h('img', { class: 'qimg', src: src, alt: '' }) : null;
       if (c.type === 'choice') {
         var box = h('div', { class: 'lv-opts' });
         var land = innerWidth > innerHeight * 1.1;
