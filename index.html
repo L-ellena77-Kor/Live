@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0d1117">
+<title>열평형 생각 모으기</title>
+<!-- Copyright 2026 엘레나 -->
+<style>html,body{background:#0d1117;margin:0}</style>
+</head>
+<body>
+<!-- (선택) 학교 공용 설정 파일. 비워 두면 선생님 화면의 ⚙ 설정을 씁니다 -->
+<script src="live-config.js"></script>
+<script src="live.js"></script>
+<script>
+/* ─────────────────────────────────────────────
+ * 수업 문항은 여기만 고치면 됩니다.
+ *  type:'choice' → 객관식 (options 최대 8개, answer는 0부터 센 정답 번호 · 없어도 됨)
+ *  type:'text'   → 서술형 (최대 400자)
+ *  img: 그림 주소(선택) — 같은 폴더의 그림 파일 이름을 적어도 돼요
+ * ───────────────────────────────────────────── */
+var cups = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180">' +
+  '<rect width="320" height="180" fill="#0d1117"/>' +
+  '<path d="M30 40h90l-10 120H40z" fill="none" stroke="#cfd8e3" stroke-width="4"/>' +
+  '<path d="M36 80h78l-6 76H42z" fill="#ff6b5b"/>' +
+  '<text x="75" y="125" fill="#fff" font-size="22" font-weight="700" text-anchor="middle">80℃</text>' +
+  '<path d="M200 40h90l-10 120h-70z" fill="none" stroke="#cfd8e3" stroke-width="4"/>' +
+  '<path d="M206 80h78l-6 76h-66z" fill="#4c9dff"/>' +
+  '<text x="245" y="125" fill="#fff" font-size="22" font-weight="700" text-anchor="middle">20℃</text>' +
+  '<text x="160" y="105" fill="#ffc24b" font-size="34" text-anchor="middle">+</text></svg>');
+
+Live.start({
+  id: 'heat-equilibrium-1',          // 수업마다 다르게 (답이 섞이지 않게)
+  title: '열평형 생각 모으기',
+  items: [
+    { type: 'choice', img: cups,
+      q: '80℃ 물과 20℃ 물을 섞고 오래 두면 두 물의 온도는 어떻게 될까요?',
+      options: ['80℃가 된다', '20℃가 된다', '두 온도 사이 어딘가에서 같아진다', '끝까지 서로 다르다'],
+      answer: 2 },
+    { type: 'choice',
+      q: '온도가 다른 두 물체가 닿아 있을 때, 열은 어느 쪽으로 이동할까요?',
+      options: ['온도가 높은 쪽 → 낮은 쪽', '온도가 낮은 쪽 → 높은 쪽', '양쪽으로 똑같이', '이동하지 않는다'],
+      answer: 0 },
+    { type: 'text',
+      q: '생활 속에서 열평형을 볼 수 있는 예를 하나 적어 보세요.' },
+    { type: 'text',
+      q: '오늘 수업에서 더 알고 싶어진 것이 있나요?' }
+  ]
+});
+</script>
+</body>
+</html>
