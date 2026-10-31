@@ -9,7 +9,7 @@
      형성평가 문항을 입력하면 저장소에 올리기만 하면 되는 실시간 수업 파일(.html)을 만들어 줍니다.
      입력한 내용과 그림은 이 컴퓨터 안에서만 처리되고 어디로도 보내지 않아요. -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
-<script src="live.js?v=1.1.0"></script><!-- 엔진 버전 번호만 읽어 와요 -->
+<script src="live.js?v=1.2.0"></script><!-- 엔진 버전 번호만 읽어 와요 -->
 <style>
 :root{--bg:#0d1117;--p1:#161b23;--p2:#1f2630;--line:#2c3542;--fg:#eef3f8;--sub:#9aa7b6;--ac:#4cc2ff;--ok:#5ee08a;--bad:#ff6b7d;--warn:#ffc24b}
 *{box-sizing:border-box}
@@ -65,6 +65,19 @@ textarea.in{resize:vertical;min-height:3.2em;line-height:1.4}
 .box h2{margin:0;font-size:1.4em}
 .box ol{margin:0;padding-left:1.4em;line-height:1.9}
 .box code{background:var(--p2);padding:.1em .4em;border-radius:.3em;color:var(--warn)}
+.split{flex:1;display:flex;min-height:0}
+#pvp{width:min(46%,900px);display:flex;flex-direction:column;border-left:1px solid var(--line);background:#090c11;min-width:0}
+#pvp .ph{display:flex;align-items:center;gap:.5em;padding:.5em .7em;border-bottom:1px solid var(--line);white-space:nowrap;flex-wrap:wrap}
+#pvp .ph b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+#pvStage{flex:1;position:relative;overflow:hidden;min-height:0}
+#pvStage iframe{position:absolute;border:0;transform-origin:0 0;background:#0d1117;box-shadow:0 0 0 2px var(--line),0 8px 30px #000a;border-radius:4px}
+#pvp .pnote{font-size:.72em;color:var(--sub);padding:.4em .8em .6em;line-height:1.5}
+#pvBtn,#pvClose{display:none}
+@media (max-width:1000px){
+ #pvp{display:none;position:fixed;inset:0;width:auto;z-index:8;border:0}
+ #pvp.show{display:flex}
+ #pvBtn,#pvClose{display:inline-flex}
+}
 .copy{font-size:11px;color:#5d6876;text-align:right;padding:2px 10px}
 </style>
 </head>
@@ -74,10 +87,12 @@ textarea.in{resize:vertical;min-height:3.2em;line-height:1.4}
   <a class="btn" href="index.html">📚 목록</a>
   <button class="btn" id="open" title="이전에 만든 퀴즈 파일 고치기">📂 불러오기</button>
   <button class="btn" id="new">새로 만들기</button>
+  <button class="btn" id="pvBtn">👁 미리보기</button>
   <button class="btn" id="fs" title="전체화면">⛶</button>
   <input type="file" id="openFile" accept=".html,.htm" hidden>
   <input type="file" id="imgFile" accept="image/*" hidden>
 </div>
+<div class="split">
 <main><div class="wrap">
   <div class="head">
     <label class="f">수업 제목 <small>학생 화면과 목록에 보이는 이름</small><input class="in" id="title" placeholder="예: 보일 법칙 형성평가"></label>
@@ -86,6 +101,18 @@ textarea.in{resize:vertical;min-height:3.2em;line-height:1.4}
   <div id="qs"></div>
   <p class="hint">✔ 고르기 문항은 보기 왼쪽의 동그라미로 정답을 고를 수 있어요(안 골라도 돼요). 그림은 🖼 칸을 누르거나, 캡처한 뒤 문항을 한 번 누르고 Ctrl+V로 붙여 넣거나, 그림 파일을 끌어다 놓으면 돼요. 이 컴퓨터에서 알맞게 줄여서 파일 안에 넣어요. 입력하는 동안 이 컴퓨터에 자동으로 임시 저장돼요.</p>
 </div></main>
+<aside id="pvp">
+  <div class="ph">
+    <b id="pvTitle">미리보기</b>
+    <span class="seg" id="pvDev">
+      <button data-d="cb" class="on">학생 크롬북</button><button data-d="ph">학생 휴대폰</button><button data-d="tv">선생님 TV</button>
+    </span>
+    <button class="btn sm" id="pvClose">닫기 ✕</button>
+  </div>
+  <div id="pvStage"><iframe id="pvFrame" title="미리보기"></iframe></div>
+  <div class="pnote">실제 화면과 같은 비율로 보여 줘요. 글자가 너무 작아지면 문장을 줄이거나 문항을 둘로 나눠 보세요. 문항을 누르면 그 문항이 보여요.</div>
+</aside>
+</div>
 <div class="foot">
   <button class="btn" id="addC">＋ 고르기 문항</button>
   <button class="btn" id="addT">＋ 서술형 문항</button>
@@ -122,7 +149,7 @@ textarea.in{resize:vertical;min-height:3.2em;line-height:1.4}
   function choice() { return { type: 'choice', q: '', img: null, options: ['', '', '', ''], answer: null }; }
   function text() { return { type: 'text', q: '', img: null }; }
   function load() { try { return JSON.parse(localStorage.getItem(KEY)); } catch (e) { return null; } }
-  function save() { try { localStorage.setItem(KEY, JSON.stringify(D)); } catch (e) { $('err').textContent = '그림이 너무 많아 임시 저장을 못 했어요 (만들기는 돼요)'; } }
+  function save() { schedulePv(); try { localStorage.setItem(KEY, JSON.stringify(D)); } catch (e) { $('err').textContent = '그림이 너무 많아 임시 저장을 못 했어요 (만들기는 돼요)'; } }
 
   function el(tag, attrs, kids) {
     var e = document.createElement(tag);
@@ -161,7 +188,8 @@ textarea.in{resize:vertical;min-height:3.2em;line-height:1.4}
       el('button', { class: it.type === 'choice' ? 'on' : '', text: '고르기', onclick: function () { setType(i, 'choice'); } }),
       el('button', { class: it.type === 'text' ? 'on' : '', text: '서술형', onclick: function () { setType(i, 'text'); } })
     ]);
-    var q = el('textarea', { class: 'in', rows: '2', placeholder: '질문을 적어 주세요', value: it.q, oninput: function () { it.q = this.value; save(); } });
+    var q = el('textarea', { class: 'in', rows: '2', placeholder: '질문을 적어 주세요 (Enter로 줄을 바꾸면 학생 화면에서도 줄이 바뀌어요)', value: it.q, oninput: function () { it.q = this.value; grow(this); save(); } });
+    setTimeout(function () { grow(q); }, 0);
     var pv = el('div', { class: 'pv', title: '클릭해서 고르기 · 캡처 후 Ctrl+V · 그림 파일 끌어다 놓기', onclick: function () { imgTarget = i; $('imgFile').value = ''; $('imgFile').click(); },
       ondragover: function (e) { e.preventDefault(); this.classList.add('drag'); },
       ondragleave: function () { this.classList.remove('drag'); },
@@ -197,10 +225,12 @@ textarea.in{resize:vertical;min-height:3.2em;line-height:1.4}
       focusIdx = i;
       Array.prototype.forEach.call(document.querySelectorAll('.q'), function (x) { x.classList.remove('sel'); });
       cardEl.classList.add('sel');
+      schedulePv(true);
     }
     cardEl.addEventListener('focusin', pickMe); cardEl.addEventListener('mousedown', pickMe);
     return cardEl;
   }
+  function grow(t) { t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight + 4, innerHeight * 0.5) + 'px'; }
   function move(i, d) { var t = D.items[i]; D.items[i] = D.items[i + d]; D.items[i + d] = t; save(); render(); }
   function setType(i, t) {
     var it = D.items[i]; if (it.type === t) return;
@@ -233,7 +263,7 @@ textarea.in{resize:vertical;min-height:3.2em;line-height:1.4}
     focusIdx = i; setImg(i, f);
     $('err').textContent = ''; flash((i + 1) + '번 문항에 그림을 넣었어요');
   });
-  function flash(t) { var c = $('count'), old = c.textContent; c.textContent = '✔ ' + t; c.style.color = 'var(--ok)'; setTimeout(function () { c.style.color = ''; render(); }, 1800); }
+  function flash(t) { var c = $('count'); c.textContent = '✔ ' + t; c.style.color = 'var(--ok)'; setTimeout(function () { c.style.color = ''; render(); }, 1800); }
   function setImg(i, f) {
     var it = D.items[i], url = URL.createObjectURL(f), im = new Image();
     im.onload = function () {
@@ -250,45 +280,101 @@ textarea.in{resize:vertical;min-height:3.2em;line-height:1.4}
   $('open').onclick = function () { $('openFile').value = ''; $('openFile').click(); };
   $('openFile').onchange = function () {
     var f = this.files[0]; if (!f) return;
-    f.text().then(function (t) {
-      var m = new RegExp('<' + 'script type="application/json" id="quiz-data">([\\s\\S]*?)<' + '/script>').exec(t);
-      if (!m) { alert('퀴즈 만들기로 만든 파일만 불러올 수 있어요.'); return; }
-      var d = JSON.parse(m[1]);
-      D = { title: d.title || '', file: d.id || f.name.replace(/\.html?$/i, ''), items: (d.items || []).map(function (x) {
-        return x.type === 'text' ? { type: 'text', q: x.q || '', img: x.img || null }
-          : { type: 'choice', q: x.q || '', img: x.img || null, options: (x.options || ['', '']).slice(0, 6), answer: typeof x.answer === 'number' ? x.answer : null };
-      }) };
-      $('title').value = D.title; $('file').value = D.file; save(); render();
-    }).catch(function () { alert('파일을 읽지 못했어요.'); });
+    f.text().then(function (t) { fromHtml(t, f.name); }).catch(function () { alert('파일을 읽지 못했어요.'); });
   };
+  function fromHtml(t, name) {
+    var m = new RegExp('<' + 'script type="application/json" id="quiz-data">([\\s\\S]*?)<' + '/script>').exec(t);
+    if (!m) { alert('퀴즈 만들기로 만든 파일만 불러올 수 있어요.'); return false; }
+    var d = JSON.parse(m[1]);
+    D = { title: d.title || '', file: d.id || String(name || '').replace(/\.html?$/i, ''), items: (d.items || []).map(function (x) {
+      return x.type === 'text' ? { type: 'text', q: x.q || '', img: x.img || null }
+        : { type: 'choice', q: x.q || '', img: x.img || null, options: (x.options || ['', '']).slice(0, 6), answer: typeof x.answer === 'number' ? x.answer : null };
+    }) };
+    focusIdx = 0;
+    $('title').value = D.title; $('file').value = D.file; save(); render();
+    return true;
+  }
+  // 목록이나 수업 화면의 ✏️ 단추로 왔을 때: 저장소에 올라가 있는 퀴즈를 바로 불러와요
+  (function () {
+    var m = /(?:^#|&)edit=([^&]+)/.exec(location.hash); if (!m) return;
+    var name = decodeURIComponent(m[1]);
+    history.replaceState(null, '', location.pathname);
+    if (!/^[\w.-]+\.html?$/i.test(name)) return;
+    var hasDraft = D.items.some(function (x) { return x.q.trim(); }) && D.file !== name.replace(/\.html?$/i, '');
+    if (hasDraft && !confirm('임시 저장된 「' + (D.title || '제목 없음') + '」 대신 ' + name + ' 을(를) 불러와서 고칠까요?')) return;
+    fetch(encodeURI(name), { cache: 'no-cache' }).then(function (r) { if (!r.ok) throw 0; return r.text(); })
+      .then(function (t) { if (fromHtml(t, name)) flash(name + ' 을(를) 불러왔어요. 고친 뒤 같은 이름으로 다시 올리세요'); })
+      .catch(function () { alert(name + ' 을(를) 불러오지 못했어요.'); });
+  })();
 
   // 수업 파일 만들기
   $('save').onclick = function () {
     var err = check(); $('err').textContent = err;
     if (err) return;
-    var v = (window.Live && Live.version) || '1.1.0';
+    var html = build(false), data = { title: D.title.trim() };
+    var a = el('a', { href: URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' })), download: D.file + '.html' });
+    document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+    $('doneName').textContent = data.title; $('doneFile').textContent = D.file + '.html';
+    $('done').classList.add('on');
+  };
+  // 수업 파일 내용 만들기 (pv: 미리보기용이면 빈 칸을 안내 글로 채움)
+  function build(pv) {
+    var v = (window.Live && Live.version) || '1.2.0';
     var data = {
-      id: D.file, title: D.title.trim(),
+      id: D.file || 'preview', title: D.title.trim() || (pv ? '(수업 제목)' : ''),
       items: D.items.map(function (it, i) {
-        var o = { id: 'q' + (i + 1), type: it.type, q: it.q.trim() };
+        var o = { id: 'q' + (i + 1), type: it.type, q: it.q.trim() || (pv ? '(질문을 적어 주세요)' : '') };
         if (it.img) o.img = it.img;
-        if (it.type === 'choice') { o.options = it.options.map(function (s) { return s.trim(); }); if (it.answer != null) o.answer = it.answer; }
+        if (it.type === 'choice') { o.options = it.options.map(function (s, k) { return s.trim() || (pv ? '보기 ' + (k + 1) : ''); }); if (it.answer != null) o.answer = it.answer; }
         return o;
       })
     };
     var json = JSON.stringify(data, null, 1).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
-    var html = '<!doctype html>\n<html lang="ko">\n<head>\n<meta charset="utf-8">\n' +
+    var html = '<!doctype html>\n<html lang="ko">\n<head>\n' + (pv ? '<base href="' + esc(location.href.split('#')[0]) + '">\n' : '') + '<meta charset="utf-8">\n' +
       '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n<meta name="theme-color" content="#0d1117">\n' +
       '<title>' + esc(data.title) + '</title>\n<' + '!-- Copyright 2026 엘레나 · 퀴즈 만들기(maker.html)로 만든 파일 · 고칠 때는 퀴즈 만들기의 📂 불러오기를 쓰세요 -->\n' +
       '<style>html,body{background:#0d1117;margin:0}</style>\n</head>\n<body>\n' +
       '<' + 'script src="live-config.js?v=' + v + '"><' + '/script>\n<' + 'script src="live.js?v=' + v + '"><' + '/script>\n' +
       '<' + 'script type="application/json" id="quiz-data">' + json + '<' + '/script>\n' +
       '<' + 'script>Live.start(JSON.parse(document.getElementById(\'quiz-data\').textContent));<' + '/script>\n</body>\n</html>\n';
-    var a = el('a', { href: URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' })), download: D.file + '.html' });
-    document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
-    $('doneName').textContent = data.title; $('doneFile').textContent = D.file + '.html';
-    $('done').classList.add('on');
-  };
+    return html;
+  }
+
+  // ───── 미리보기: 실제 화면 크기로 그린 뒤 줄여서 보여 줘요 ─────
+  var DEV = { cb: { w: 1366, h: 768, who: 's', name: '학생 크롬북' }, ph: { w: 390, h: 844, who: 's', name: '학생 휴대폰' }, tv: { w: 1920, h: 1080, who: 't', name: '선생님 TV' } };
+  var dev = 'cb', pvUrl = null, pvTimer = null;
+  try { dev = localStorage.getItem('lv-maker-dev') || 'cb'; if (!DEV[dev]) dev = 'cb'; } catch (e) {}
+  Array.prototype.forEach.call(document.querySelectorAll('#pvDev button'), function (b) {
+    b.classList.toggle('on', b.dataset.d === dev);
+    b.onclick = function () {
+      dev = b.dataset.d; try { localStorage.setItem('lv-maker-dev', dev); } catch (e) {}
+      Array.prototype.forEach.call(document.querySelectorAll('#pvDev button'), function (x) { x.classList.toggle('on', x === b); });
+      showPv();
+    };
+  });
+  $('pvBtn').onclick = function () { $('pvp').classList.add('show'); showPv(); };
+  $('pvClose').onclick = function () { $('pvp').classList.remove('show'); };
+  function pvVisible() { return getComputedStyle($('pvp')).display !== 'none'; }
+  function schedulePv(now) { clearTimeout(pvTimer); pvTimer = setTimeout(showPv, now ? 30 : 600); }
+  function placePv() {
+    var st = $('pvStage'), d = DEV[dev], f = $('pvFrame');
+    var W = st.clientWidth - 24, H = st.clientHeight - 24, k = Math.min(W / d.w, H / d.h);
+    f.style.width = d.w + 'px'; f.style.height = d.h + 'px';
+    f.style.transform = 'scale(' + k + ')';
+    f.style.left = Math.round((st.clientWidth - d.w * k) / 2) + 'px'; f.style.top = Math.round((st.clientHeight - d.h * k) / 2) + 'px';
+  }
+  function showPv() {
+    if (!pvVisible()) return;
+    placePv();
+    if (!D.items.length) { $('pvTitle').textContent = '미리보기 (문항 없음)'; return; }
+    var i = focusIdx >= 0 && focusIdx < D.items.length ? focusIdx : 0, d = DEV[dev];
+    $('pvTitle').textContent = (i + 1) + '번 문항 · ' + d.name;
+    var old = pvUrl;
+    pvUrl = URL.createObjectURL(new Blob([build(true)], { type: 'text/html;charset=utf-8' }));
+    $('pvFrame').src = pvUrl + '#pv=' + i + '&who=' + d.who;
+    if (old) setTimeout(function () { URL.revokeObjectURL(old); }, 3000);
+  }
+  var rzP; window.addEventListener('resize', function () { clearTimeout(rzP); rzP = setTimeout(function () { placePv(); }, 100); });
   $('doneOk').onclick = function () { $('done').classList.remove('on'); };
 
   function check() {
@@ -308,7 +394,9 @@ textarea.in{resize:vertical;min-height:3.2em;line-height:1.4}
   }
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
+  if (focusIdx < 0 && D.items.length) focusIdx = 0;
   render();
+  schedulePv(true);
 })();
 </script>
 </body>

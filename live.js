@@ -1,5 +1,5 @@
 /*!
- * live.js — 나만의 실시간 수업 엔진 v1.1.0
+ * live.js — 나만의 실시간 수업 엔진 v1.2.0
  * Copyright 2026 엘레나
  *
  * 처음부터 새로 작성한 코드입니다.
@@ -30,7 +30,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '1.1.0';
+  var VERSION = '1.2.0';
   var COPY = 'Copyright 2026 엘레나';
   var SB_CDN = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
   var QR_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';
@@ -241,8 +241,8 @@
     '.lv-stage{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;padding:clamp(8px,1.6vmin,22px);gap:clamp(6px,1.2vmin,16px)}',
     '.lv-qhead{display:flex;gap:1em;align-items:flex-start;min-height:0}',
     '.lv-qnum{font-weight:800;color:var(--lv-ac);font-size:clamp(16px,2.6vmin,40px);white-space:nowrap;padding-top:.15em}',
-    '.lv-qtext{flex:1;font-weight:700;line-height:1.3;font-size:clamp(20px,4.4vmin,72px);word-break:keep-all;overflow-wrap:anywhere;max-height:30vh;overflow:hidden}',
-    '.lv-qimg{max-height:26vh;max-width:32vw;border-radius:.6em;object-fit:contain;background:#000}',
+    '.lv-qtext{flex:1;min-width:0;font-weight:700;line-height:1.3;font-size:clamp(20px,4.4vmin,72px);word-break:keep-all;overflow-wrap:anywhere;white-space:pre-wrap;max-height:44vh;overflow:hidden}',
+    '.lv-qimg{max-height:40vh;max-width:36vw;border-radius:.6em;object-fit:contain;background:#000}',
     '.lv-ctl{display:flex;flex-wrap:wrap;gap:.45em;align-items:center;font-size:clamp(14px,1.2vmin + 8px,24px)}',
     '.lv-ctl .sp{flex:1}',
     '.lv-state{font-weight:700;padding:.3em .8em;border-radius:999px;background:var(--lv-p2);white-space:nowrap}',
@@ -302,11 +302,17 @@
     '.lv-s .lv-sb{font-size:clamp(15px,2.6vmin,30px);color:var(--lv-sub);line-height:1.5;word-break:keep-all}',
     '.lv-s .pulse{width:clamp(40px,10vmin,110px);height:clamp(40px,10vmin,110px);border-radius:50%;background:var(--lv-ac);animation:lvpulse 1.6s infinite}',
     '@keyframes lvpulse{0%{transform:scale(.7);opacity:.9}100%{transform:scale(1.3);opacity:0}}',
-    '.lv-s .lv-q{font-size:clamp(20px,4.6vmin,60px);font-weight:800;line-height:1.3;word-break:keep-all;overflow-wrap:anywhere}',
+    '.lv-s .lv-q{font-size:clamp(20px,4.6vmin,60px);font-weight:800;line-height:1.3;word-break:keep-all;overflow-wrap:anywhere;white-space:pre-wrap}',
+    '.lv-qwrap{display:flex;flex-direction:column;gap:clamp(6px,1.4vmin,16px);max-height:46vh;min-height:0;flex:0 0 auto}',
+    '.lv-qwrap.land{flex-direction:row;align-items:stretch}',
+    '.lv-qwrap .lv-q{flex:1 1 auto;min-height:0;min-width:0;overflow:hidden}',
+    '.lv-qwrap .qimg{flex:0 1 auto;min-height:0;max-height:22vh}',
+    '.lv-qwrap.land .qimg{max-height:44vh;max-width:46%;align-self:center}',
     '.lv-s .lv-q small{display:block;color:var(--lv-ac);font-size:.55em;margin-bottom:.2em}',
     '.lv-s .qimg{max-height:28vh;max-width:100%;object-fit:contain;border-radius:.6em;align-self:center;background:#000}',
     '.lv-opts{flex:1;display:grid;gap:clamp(8px,1.8vmin,18px);min-height:0;grid-auto-rows:1fr}',
     '.lv-opt{white-space:normal;font:inherit;color:var(--lv-fg);background:var(--lv-p1);border:3px solid var(--lv-line);border-radius:1em;font-size:clamp(18px,4.2vmin,52px);font-weight:700;display:flex;align-items:center;gap:.5em;padding:.3em .7em;text-align:left;cursor:pointer;word-break:keep-all;overflow:hidden;min-height:2.4em}',
+    '.lv-opt span{min-width:0}',
     '.lv-opt .mk{font-size:1.2em}',
     '.lv-opt.sel{border-color:var(--lv-ac);background:#11293a}',
     '.lv-opt.right{border-color:var(--lv-ok);background:#123a24}',
@@ -363,7 +369,7 @@
   /* ══════════════════════════════════════════
    *  선생님 화면
    * ══════════════════════════════════════════ */
-  function Teacher(lesson) {
+  function Teacher(lesson, PV) {      // PV: 퀴즈 만들기의 미리보기일 때 문항 번호
     var items = normItems(lesson.items);
     var KEY = 'lv-t:' + (lesson.id || location.pathname);
     var CFGKEY = 'lv-cfg';
@@ -375,8 +381,12 @@
     function fresh() {
       return { go: { p: 0, s: 0 }, code: code6(), keys: null, cur: 0, open: false, reveal: {}, veil: false, showMeta: false, answers: {}, seq: Date.now(), started: Date.now() };
     }
-    if (!S || !S.code) S = fresh();
-    function save() { LS.set(KEY, S); }
+    if (!S || !S.code || PV != null) S = fresh();
+    if (PV != null) { S.cur = Math.min(PV, Math.max(0, items.length - 1)); S.open = true; }
+    function save() { if (PV == null) LS.set(KEY, S); }
+    // 퀴즈 만들기로 만든 파일이면 ✏️ 고치기 단추
+    var myFile = decodeURIComponent(location.pathname.split('/').pop() || '');
+    var editable = PV == null && !!document.getElementById('quiz-data') && /\.html?$/i.test(myFile);
 
     var embed = !!lesson.embed;
     var root = boot(lesson.title, { full: !embed, colors: lesson.colors });
@@ -413,6 +423,7 @@
       h('span', { class: 'lv-chip' }, ['코드 ', codeEl]),
       h('button', { class: 'lv-btn', text: 'QR', onclick: function () { showQR(true); } }),
       h('button', { class: 'lv-btn', text: 'CSV 저장', onclick: csv }),
+      editable ? h('button', { class: 'lv-btn lv-icon', title: '이 퀴즈 고치기 (퀴즈 만들기에서 열기)', text: '✏️', onclick: function () { window.open('maker.html#edit=' + encodeURIComponent(myFile), '_blank'); } }) : null,
       h('button', { class: 'lv-btn lv-icon', title: '설정', text: '⚙', onclick: function () { showCfg(true); } }),
       fsButton(),
       embed && lesson.studentSim ? h('button', { class: 'lv-btn', text: '👀 학생도 이 쪽', title: '학생들 시뮬레이션을 지금 쪽으로 옮기기', onclick: pushPage }) : null,
@@ -677,12 +688,15 @@
         ]));
       });
     }
+    function fitQ() { fit(qtext, Math.min(72, innerHeight * 0.066, innerWidth * 0.042), 14); }
     function renderStage() {
       var it = curItem();
       if (!it) { qtext.textContent = '문항이 없어요. 수업 HTML의 items에 문항을 넣어 주세요.'; return; }
       qnum.textContent = 'Q' + (S.cur + 1) + '/' + items.length;
       qtext.textContent = it.q;
-      if (it.img) { qimg.src = it.img; qimg.style.display = ''; } else qimg.style.display = 'none';
+      if (it.img) { if (qimg.getAttribute('src') !== it.img) qimg.src = it.img; qimg.style.display = ''; } else qimg.style.display = 'none';
+      fitQ();
+      qimg.onload = fitQ;                              // 그림이 늦게 뜨면 글자 크기를 다시 맞춰요
       btnPrev.disabled = S.cur === 0; btnNext.disabled = S.cur === items.length - 1;
       btnOpen.textContent = S.open ? '■ 마감하기' : '▶ 학생에게 열기';
       btnOpen.className = 'lv-btn ' + (S.open ? 'red' : 'pri');
@@ -832,8 +846,9 @@
       else if (e.key === ' ') { e.preventDefault(); toggleOpen(); }
       else if (e.key === 'f' || e.key === 'F') fsToggle();
     });
-    window.addEventListener('resize', function () { clearTimeout(stagger); stagger = setTimeout(renderRes, 150); });
+    window.addEventListener('resize', function () { clearTimeout(stagger); stagger = setTimeout(renderStage, 150); });
 
+    if (PV != null) { renderAll(); return; }
     if (embed) { renderAll(); if (cfg) start(); }
     else if (!cfg) { renderAll(); showCfg(true); }
     else { start(); showQR(true); }
@@ -842,12 +857,12 @@
   /* ══════════════════════════════════════════
    *  학생 화면
    * ══════════════════════════════════════════ */
-  function Student(lesson, q) {
+  function Student(lesson, q, PV) {   // PV: 퀴즈 만들기의 미리보기일 때 문항 번호
     lesson = lesson || {};
     // 그림은 서버로 보내지 않고, 학생 기기가 받은 수업 파일 안에서 꺼내 써요
     var localItems = normItems(lesson.items);
     function localImg(qid) { for (var i = 0; i < localItems.length; i++) if (localItems[i].qid === qid) return localItems[i].img; return null; }
-    var sim = !!lesson.studentSim;   // 학생도 수업 페이지(시뮬레이션)를 직접 조작
+    var sim = PV == null && !!lesson.studentSim;   // 학생도 수업 페이지(시뮬레이션)를 직접 조작
     var root = boot(lesson.title, { full: !sim, hideHost: !sim, colors: lesson.colors });
     root.addEventListener('keydown', function (e) { e.stopPropagation(); });
     function overlay(on) { if (sim) { root.classList.toggle('lv-hide', !on); fabQ && fabQ.classList.remove('lv-ping'); if (!on) ping(); } }
@@ -887,6 +902,11 @@
 
     function screen(kids) { body.innerHTML = ''; kids.forEach(function (k) { if (k) body.appendChild(k); }); }
 
+    if (PV != null) {                                  // 미리보기: 서버 없이 문항 화면만
+      var pit = localItems[Math.min(PV, localItems.length - 1)];
+      if (pit) { state = { cur: { qid: pit.qid, n: PV + 1, type: pit.type, q: pit.q, options: pit.options || null, open: true, ans: null } }; render(); }
+      return;
+    }
     if (cfg && !cfg.demo) {
       var p = keyProblem(cfg.url, cfg.key);
       if (p) { screen([h('div', { class: 'center' }, [h('div', { class: 'lv-msg', text: '이 링크로는 들어갈 수 없어요' }), h('div', { class: 'lv-sb', text: p })])]); return; }
@@ -1006,9 +1026,15 @@
       var head = h('div', { class: 'lv-q' }, [h('small', { text: c.n + '번 문항' + (c.open ? '' : ' · 마감') }), c.q]);
       var src = localImg(c.qid) || c.img;
       var img = src ? h('img', { class: 'qimg', src: src, alt: '' }) : null;
+      var land = innerWidth > innerHeight * 1.1;
+      var qwrap = h('div', { class: 'lv-qwrap' + (land && img ? ' land' : '') }, [head, img]);
+      function fitAll(btns) {
+        fit(head, Math.min(60, Math.min(innerWidth, innerHeight) * 0.058), 14);
+        if (img && !img.complete) img.onload = function () { fit(head, Math.min(60, Math.min(innerWidth, innerHeight) * 0.058), 14); };
+        (btns || []).forEach(function (b) { fit(b, Math.min(52, Math.min(innerWidth, innerHeight) * 0.052), 12); });
+      }
       if (c.type === 'choice') {
         var box = h('div', { class: 'lv-opts' });
-        var land = innerWidth > innerHeight * 1.1;
         box.style.gridTemplateColumns = land && c.options.length > 2 ? '1fr 1fr' : '1fr';
         c.options.forEach(function (o, i) {
           var cls = 'lv-opt';
@@ -1022,7 +1048,8 @@
             }
           }, [h('span', { class: 'mk', text: MARKS[i] }), h('span', { text: o })]));
         });
-        screen([head, img, box, statEl]);
+        screen([qwrap, box, statEl]);
+        fitAll(Array.prototype.slice.call(box.children));
       } else {
         var ta = h('textarea', { class: 'lv-in', maxlength: String(MAX_TEXT), placeholder: '여기에 생각을 적어요', disabled: !c.open });
         ta.value = mine ? mine.v : (SS.get('lv-draft:' + code + ':' + c.qid, '') || '');
@@ -1030,13 +1057,14 @@
         var btn = h('button', { class: 'lv-btn pri lv-send', text: '보내기', disabled: !c.open, onclick: function () {
           var v = ta.value.trim(); if (!v) { stat('내용을 적어 주세요', 'bad'); return; } send(c, v);
         } });
-        screen([head, img, ta, btn, statEl]);
+        screen([qwrap, ta, btn, statEl]);
+        fitAll();
       }
       if (c.ans != null && mine) stat(mine.v === c.ans ? '정답이에요! 🎉' : '정답은 ' + MARKS[c.ans] + ' 이에요', mine.v === c.ans ? 'ok' : 'bad');
       else if (mine && mine.ok) stat(c.open ? '선생님께 도착했어요 ✓  (다시 고쳐 보낼 수 있어요)' : '선생님께 도착했어요 ✓', 'ok');
       else if (!c.open) stat('마감됐어요');
     }
-    window.addEventListener('resize', function () { if (state && state.cur && state.cur.type === 'choice') render(); });
+    var rzS; window.addEventListener('resize', function () { clearTimeout(rzS); rzS = setTimeout(function () { if (state && state.cur && state.cur.type === 'choice') render(); }, 150); });
   }
 
   /* ───────────── 시작 ───────────── */
@@ -1048,7 +1076,10 @@
       lesson = lesson || {};
       var go = function () {
         var q = new URLSearchParams(location.hash.slice(1));
-        if (Live.isStudent()) Student(lesson, q); else Teacher(lesson);
+        if (q.has('pv')) {                           // 퀴즈 만들기 미리보기
+          var n = Math.max(0, parseInt(q.get('pv'), 10) || 0);
+          if (q.get('who') === 't') Teacher(lesson, n); else Student(lesson, q, n);
+        } else if (Live.isStudent()) Student(lesson, q); else Teacher(lesson);
       };
       if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
     },

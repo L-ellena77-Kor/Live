@@ -25,6 +25,9 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);overflow:hid
 .card .t{font-weight:800;line-height:1.25;word-break:keep-all;overflow:hidden}
 .card .f{color:var(--sub);font-size:clamp(12px,1.6vmin,20px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .card .tag{align-self:flex-start;font-size:clamp(12px,1.5vmin,18px);font-weight:700;color:#04131c;background:var(--ok);border-radius:999px;padding:.15em .7em}
+.card{position:relative}
+.card .ed{position:absolute;top:.5em;right:.5em;font:inherit;font-size:clamp(14px,1.8vmin,22px);font-weight:700;color:var(--fg);background:var(--p2);border:1px solid var(--line);border-radius:.6em;padding:.25em .7em;cursor:pointer;white-space:nowrap}
+.card .ed:hover{border-color:var(--ac)}
 .card .tag.plain{background:var(--p2);color:var(--sub)}
 .msg{grid-column:1/-1;align-self:center;text-align:center;color:var(--sub);font-size:clamp(18px,3.4vmin,40px);line-height:1.6;word-break:keep-all}
 .msg b{color:var(--fg)}
@@ -46,7 +49,7 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);overflow:hid
 (function () {
   'use strict';
   var HIDE = { 'index.html': 1, 'maker.html': 1 };   // 목록에 안 보일 파일 (이름이 _로 시작해도 숨김)
-  var CACHE = 'lv-list-v1', TTL = 10 * 60 * 1000;
+  var CACHE = 'lv-list-v2', TTL = 10 * 60 * 1000;
   var list = document.getElementById('list');
 
   document.getElementById('fs').onclick = function () {
@@ -79,12 +82,12 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);overflow:hid
           return step();
         });
       })();
-    }).catch(function () { return { title: '', live: false }; });
+    }).catch(function () { return { title: '', live: false, quiz: false }; });
   }
   function pick(t) {
     var m = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(t);
     var div = document.createElement('div'); div.innerHTML = m ? m[1] : '';
-    return { title: (div.textContent || '').trim(), live: /live\.js/i.test(t) };
+    return { title: (div.textContent || '').trim(), live: /live\.js/i.test(t), quiz: /maker\.html/i.test(t) };
   }
 
   function load() {
@@ -102,7 +105,7 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);overflow:hid
       .then(function (files) {
         var html = files.filter(function (f) { return f.type === 'file' && /\.html?$/i.test(f.name) && !HIDE[f.name.toLowerCase()] && f.name[0] !== '_'; });
         return Promise.all(html.map(function (f) {
-          return readTitle(f.name).then(function (x) { return { file: f.name, title: x.title || f.name.replace(/\.html?$/i, ''), live: x.live }; });
+          return readTitle(f.name).then(function (x) { return { file: f.name, title: x.title || f.name.replace(/\.html?$/i, ''), live: x.live, quiz: x.quiz }; });
         }));
       })
       .then(function (items) {
@@ -142,6 +145,12 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);overflow:hid
       a.querySelector('.t').textContent = it.title;
       a.querySelector('.t').style.fontSize = fsz + 'px';
       a.querySelector('.f').textContent = it.file;
+      if (it.quiz) {                                   // 퀴즈 만들기로 만든 파일은 바로 고칠 수 있어요
+        var ed = document.createElement('button');
+        ed.className = 'ed'; ed.textContent = '✏️ 고치기'; ed.title = '퀴즈 만들기에서 열어 고치기';
+        ed.onclick = function (e) { e.preventDefault(); e.stopPropagation(); location.href = 'maker.html#edit=' + encodeURIComponent(it.file); };
+        a.appendChild(ed);
+      }
       list.appendChild(a);
     });
   }
