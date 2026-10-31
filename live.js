@@ -1,5 +1,5 @@
 /*!
- * live.js — 나만의 실시간 수업 엔진 v1.2.0
+ * live.js — 나만의 실시간 수업 엔진 v1.3.0
  * Copyright 2026 엘레나
  *
  * 처음부터 새로 작성한 코드입니다.
@@ -30,7 +30,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '1.2.0';
+  var VERSION = '1.3.0';
   var COPY = 'Copyright 2026 엘레나';
   var SB_CDN = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
   var QR_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';
@@ -91,6 +91,14 @@
     for (var g = 0; g < 40 && s > min && (el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1); g++) {
       s = Math.max(min, s * 0.9); el.style.fontSize = s + 'px';
     }
+  }
+  // 그림을 화면 가득 크게 보기 (누르거나 Esc로 닫기)
+  function zoomImg(src) {
+    var ov = h('div', { class: 'lv-ov on lv-zoom', title: '누르면 닫혀요' }, [h('img', { src: src, alt: '' })]);
+    function close() { ov.remove(); document.removeEventListener('keydown', esc, true); }
+    function esc(e) { if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); close(); } }
+    ov.addEventListener('click', close); document.addEventListener('keydown', esc, true);
+    document.body.appendChild(ov);
   }
   function fsToggle() {
     var d = document;
@@ -285,6 +293,12 @@
     '.lv-bigtx{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;font-weight:700;line-height:1.35;word-break:keep-all;overflow-wrap:anywhere;white-space:pre-wrap;overflow:hidden;padding:2vmin}',
     '.lv-arrow{font-size:clamp(24px,6vmin,80px);background:none;border:none;color:var(--lv-sub);cursor:pointer;padding:0 1vmin}',
     '.lv-arrow:hover{color:var(--lv-fg)}',
+    '.lv-pic{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;gap:.5em}',
+    '.lv-pic img{flex:1;min-height:0;width:100%;object-fit:contain;cursor:zoom-in;border-radius:.6em}',
+    '.lv-pic .cap{color:var(--lv-sub);font-size:clamp(14px,2vmin,26px);white-space:nowrap}',
+    '.lv-zoom{padding:1.5vmin;cursor:zoom-out;background:#000}',
+    '.lv-zoom img{width:100%;height:100%;object-fit:contain}',
+    '.lv-qimg,.lv-s .qimg{cursor:zoom-in}',
 
     /* 설정 */
     '.lv-form{margin:auto;width:min(760px,94vw);display:flex;flex-direction:column;gap:1em;font-size:clamp(15px,1.4vmin + 8px,24px);padding:1em;overflow:auto;max-height:100%}',
@@ -446,7 +460,7 @@
     var list = h('div', { class: 'lv-list' });
     var qnum = h('div', { class: 'lv-qnum' });
     var qtext = h('div', { class: 'lv-qtext' });
-    var qimg = h('img', { class: 'lv-qimg', alt: '' });
+    var qimg = h('img', { class: 'lv-qimg', alt: '', title: '누르면 화면 가득 크게', onclick: function () { zoomImg(this.src); } });
     var stateEl = h('span', { class: 'lv-state' });
     var btnPrev = h('button', { class: 'lv-btn', text: '◀ 이전', onclick: function () { go(S.cur - 1); } });
     var btnOpen = h('button', { class: 'lv-btn pri', onclick: toggleOpen });
@@ -455,11 +469,12 @@
     var btnReveal = h('button', { class: 'lv-btn', text: '정답 공개', onclick: toggleReveal });
     var btnShowHidden = h('button', { class: 'lv-btn', onclick: unhideAll });
     var btnClear = h('button', { class: 'lv-btn', text: '이 문항 답 지우기', onclick: clearCur });
+    var btnPic = h('button', { class: 'lv-btn', onclick: function () { S.pic = !S.pic; save(); renderStage(); } });
     var tally = h('span', { class: 'lv-chip' });
     var res = h('div', { class: 'lv-res' });
     var stage = h('div', { class: 'lv-stage' }, [
       h('div', { class: 'lv-qhead' }, [qnum, qtext, qimg]),
-      h('div', { class: 'lv-ctl' }, [btnPrev, btnOpen, btnNext, stateEl, tally, h('span', { class: 'sp' }), btnVeil, btnReveal, btnShowHidden, btnClear]),
+      h('div', { class: 'lv-ctl' }, [btnPrev, btnOpen, btnNext, stateEl, tally, h('span', { class: 'sp' }), btnPic, btnVeil, btnReveal, btnShowHidden, btnClear]),
       res
     ]);
     root.appendChild(bar);
@@ -662,7 +677,7 @@
     /* 문항 이동·열기 */
     function go(i) {
       if (i < 0 || i >= items.length || i === S.cur) return;
-      S.cur = i; S.open = false; S.veil = false; save();
+      S.cur = i; S.open = false; S.veil = false; S.pic = false; save();
       sendState(); renderAll();
     }
     function toggleOpen() { S.open = !S.open; save(); sendState(); renderAll(); }
@@ -688,13 +703,18 @@
         ]));
       });
     }
+    var picMode = false;
     function fitQ() { fit(qtext, Math.min(72, innerHeight * 0.066, innerWidth * 0.042), 14); }
     function renderStage() {
       var it = curItem();
       if (!it) { qtext.textContent = '문항이 없어요. 수업 HTML의 items에 문항을 넣어 주세요.'; return; }
       qnum.textContent = 'Q' + (S.cur + 1) + '/' + items.length;
       qtext.textContent = it.q;
-      if (it.img) { if (qimg.getAttribute('src') !== it.img) qimg.src = it.img; qimg.style.display = ''; } else qimg.style.display = 'none';
+      var nAns = Object.keys(S.answers[it.qid] || {}).length;
+      picMode = !!it.img && (!nAns || !!S.pic);       // 답이 오기 전에는 그림을 크게
+      if (it.img && !picMode) { if (qimg.getAttribute('src') !== it.img) qimg.src = it.img; qimg.style.display = ''; } else qimg.style.display = 'none';
+      btnPic.style.display = it.img && nAns ? '' : 'none';
+      btnPic.textContent = S.pic ? '📊 결과 보기' : '🖼 그림 크게';
       fitQ();
       qimg.onload = fitQ;                              // 그림이 늦게 뜨면 글자 크기를 다시 맞춰요
       btnPrev.disabled = S.cur === 0; btnNext.disabled = S.cur === items.length - 1;
@@ -720,6 +740,13 @@
       var A = S.answers[it.qid] || {};
       res.innerHTML = '';
       var keys = Object.keys(A);
+      if (picMode && it.img) {
+        res.appendChild(h('div', { class: 'lv-pic' }, [
+          h('img', { src: it.img, alt: '', title: '누르면 화면 가득 크게', onclick: function () { zoomImg(it.img); } }),
+          h('div', { class: 'cap', text: keys.length ? '답 ' + keys.length + '개 · 📊 결과 보기를 누르면 결과가 나와요' : (S.open ? '학생들의 답을 기다리고 있어요… (그림을 누르면 화면 가득)' : '"▶ 학생에게 열기"를 누르면 학생 화면에 이 문항이 나타나요') })
+        ]));
+        return;
+      }
       if (!keys.length) {
         res.appendChild(h('div', { class: 'lv-empty', text: S.open ? '학생들의 답을 기다리고 있어요…' : '"▶ 학생에게 열기"를 누르면 학생 화면에 이 문항이 나타나요' }));
         return;
@@ -1025,7 +1052,7 @@
       statEl = h('div', { class: 'lv-stat' });
       var head = h('div', { class: 'lv-q' }, [h('small', { text: c.n + '번 문항' + (c.open ? '' : ' · 마감') }), c.q]);
       var src = localImg(c.qid) || c.img;
-      var img = src ? h('img', { class: 'qimg', src: src, alt: '' }) : null;
+      var img = src ? h('img', { class: 'qimg', src: src, alt: '', title: '누르면 크게', onclick: function () { zoomImg(src); } }) : null;
       var land = innerWidth > innerHeight * 1.1;
       var qwrap = h('div', { class: 'lv-qwrap' + (land && img ? ' land' : '') }, [head, img]);
       function fitAll(btns) {

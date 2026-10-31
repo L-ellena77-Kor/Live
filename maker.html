@@ -9,7 +9,7 @@
      형성평가 문항을 입력하면 저장소에 올리기만 하면 되는 실시간 수업 파일(.html)을 만들어 줍니다.
      입력한 내용과 그림은 이 컴퓨터 안에서만 처리되고 어디로도 보내지 않아요. -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
-<script src="live.js?v=1.2.0"></script><!-- 엔진 버전 번호만 읽어 와요 -->
+<script src="live.js?v=1.3.0"></script><!-- 엔진 버전 번호만 읽어 와요 -->
 <style>
 :root{--bg:#0d1117;--p1:#161b23;--p2:#1f2630;--line:#2c3542;--fg:#eef3f8;--sub:#9aa7b6;--ac:#4cc2ff;--ok:#5ee08a;--bad:#ff6b7d;--warn:#ffc24b}
 *{box-sizing:border-box}
@@ -319,7 +319,7 @@ textarea.in{resize:vertical;min-height:3.2em;line-height:1.4}
   };
   // 수업 파일 내용 만들기 (pv: 미리보기용이면 빈 칸을 안내 글로 채움)
   function build(pv) {
-    var v = (window.Live && Live.version) || '1.2.0';
+    var v = (window.Live && Live.version) || '1.3.0';
     var data = {
       id: D.file || 'preview', title: D.title.trim() || (pv ? '(수업 제목)' : ''),
       items: D.items.map(function (it, i) {
