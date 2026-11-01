@@ -1,5 +1,5 @@
 /*!
- * live.js — 나만의 실시간 수업 엔진 v1.6.0
+ * live.js — 나만의 실시간 수업 엔진 v1.6.1
  * Copyright 2026 엘레나
  *
  * 처음부터 새로 작성한 코드입니다.
@@ -30,7 +30,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '1.6.0';
+  var VERSION = '1.6.1';
   var COPY = 'Copyright 2026 엘레나';
   var SB_CDN = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
   var QR_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';
@@ -1268,12 +1268,11 @@
           if (sim && d.go && d.go.s > lastGo) {            // 선생님이 "학생도 이 쪽"을 눌렀어요
             lastGo = d.go.s;
             try { lesson.goPage && lesson.goPage(d.go.p, d.go.k || 0); } catch (e) {}
-            if (d.view === 'sim' || !(d.cur && d.cur.open && !myAns[d.cur.qid])) overlay(false);
+            if (!d.view && !(d.cur && d.cur.open && !myAns[d.cur.qid])) overlay(false);
           }
-          // 함께 넘기기: 선생님이 질문 창을 닫고 수업 화면으로 가면 학생도 수업 화면으로
+          // 함께 넘기기: 선생님 화면이 질문 창이면 학생도 질문 창, 수업 화면이면 학생도 수업 화면
           if (sim && d.view && d.view !== lastView) {
-            if (d.view === 'sim' && lastView) overlay(false);
-            else if (d.view === 'q' && lastView === 'sim' && d.cur && d.cur.open) overlay(true);
+            overlay(d.view === 'q');
             lastView = d.view;
           }
           ping();
@@ -1287,7 +1286,7 @@
     }
 
     function waiting(msg, sub, idle) {
-      if (idle && sim) overlay(false);                    // 기다리는 동안엔 시뮬레이션을 하도록
+      if (idle && sim && !(state && state.view)) overlay(false);   // 기다리는 동안엔 시뮬레이션을 하도록 (함께 넘기기 중엔 선생님 화면을 따름)
       screen([h('div', { class: 'center' }, [h('div', { class: 'pulse' }), h('div', { class: 'lv-msg', text: msg }), sub ? h('div', { class: 'lv-sb', text: sub }) : null])]);
     }
     var statEl = null;
@@ -1315,7 +1314,7 @@
       var mine = myAns[c.qid];
       if (!c.open && !mine && c.ans == null && !c.ex) return waiting('선생님을 기다리는 중', idleSub, true);
       var key = c.qid + (c.open ? ':open' : ':closed') + (c.ans != null || c.ex ? ':ans' : '');
-      if (sim && key !== popped && (c.open || c.ans != null || c.ex)) { popped = key; overlay(true); }
+      if (sim && key !== popped && (c.open || c.ans != null || c.ex)) { popped = key; if (state.view !== 'sim') overlay(true); }
       statEl = h('div', { class: 'lv-stat' });
       var head = h('div', { class: 'lv-q' }, [h('small', { text: c.n + '번 문항' + (c.open ? '' : ' · 마감') }), c.q]);
       var src = localImg(c.qid) || c.img;
