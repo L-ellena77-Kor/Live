@@ -1,5 +1,5 @@
 /*!
- * live.js — 나만의 실시간 수업 엔진 v1.5.0
+ * live.js — 나만의 실시간 수업 엔진 v1.5.1
  * Copyright 2026 엘레나
  *
  * 처음부터 새로 작성한 코드입니다.
@@ -30,7 +30,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '1.5.0';
+  var VERSION = '1.5.1';
   var COPY = 'Copyright 2026 엘레나';
   var SB_CDN = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
   var QR_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';
@@ -418,6 +418,9 @@
     '.lv-tiles{flex:1;min-width:0;min-height:0;display:grid;gap:clamp(8px,1.6vmin,18px);grid-auto-rows:1fr}',
     '.lv-tile{background:var(--lv-p1);border:3px solid var(--lv-line);border-radius:1em;display:flex;align-items:center;gap:.5em;padding:.2em .7em;font-weight:700;line-height:1.25;word-break:keep-all;overflow:hidden;min-height:0}',
     '.lv-tile .mk{font-size:1.15em}',
+    '.lv-mock{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;gap:clamp(8px,1.4vmin,16px)}',
+    '.lv-mock .box{flex:1;min-height:0;border:3px dashed var(--lv-line);border-radius:1em;background:var(--lv-p1);color:var(--lv-sub);display:flex;align-items:center;justify-content:center;text-align:center;padding:.6em;font-weight:700;line-height:1.4;overflow:hidden;word-break:keep-all}',
+    '.lv-mock .send{flex:0 0 auto;border-radius:.7em;background:var(--lv-ac);color:#04131c;text-align:center;font-weight:800;padding:.35em;opacity:.55}',
     '.lv-pre .cap{color:var(--lv-sub);font-size:clamp(14px,2vmin,24px);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
     '.lv-pic img{flex:1;min-height:0;width:100%;object-fit:contain;cursor:zoom-in;border-radius:.6em}',
     '.lv-pic .cap{color:var(--lv-sub);font-size:clamp(14px,2vmin,26px);white-space:nowrap}',
@@ -962,6 +965,20 @@
         res.appendChild(h('div', { class: 'lv-pre' }, [bodyEl, h('div', { class: 'cap', text: waitCap })]));
         var tf = Math.min(60, innerHeight * 0.06, innerWidth * 0.04);
         Array.prototype.forEach.call(tiles.children, function (t) { fit(t, tf, 12); });
+        return;
+      }
+      // 서술형도 답이 오기 전에는 학생이 보는 답란을 보여 줘요 (그림은 왼쪽에 작게, 누르면 크게)
+      if (it.type === 'text' && (!keys.length || (picMode && it.img))) {
+        var landT = res.clientWidth > res.clientHeight * 1.15;
+        var mbox = h('div', { class: 'box', text: '✎ 학생들은 여기에 생각을 적어 보내요\n(400자까지)' });
+        mbox.style.whiteSpace = 'pre-line';
+        var mock = h('div', { class: 'lv-mock' }, [mbox, h('div', { class: 'send', text: '보내기' })]);
+        var kidsT = it.img ? [h('div', { class: 'pimg' }, [h('img', { src: it.img, alt: '', title: '누르면 화면 가득 크게', onclick: function () { zoomImg(it.img); } })]), mock] : [mock];
+        var bodyT = h('div', { class: 'body' }, kidsT);
+        if (it.img && !landT) bodyT.style.flexDirection = 'column';
+        res.appendChild(h('div', { class: 'lv-pre' }, [bodyT, h('div', { class: 'cap', text: waitCap + (it.example ? ' · 💡 예시 답이 준비돼 있어요' : '') })]));
+        var mf = Math.min(46, innerHeight * 0.05, innerWidth * 0.032);
+        fit(mbox, mf, 12); mock.lastChild.style.fontSize = Math.max(16, mf * 0.8) + 'px';
         return;
       }
       if (picMode && it.img) {
