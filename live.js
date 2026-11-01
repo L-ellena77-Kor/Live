@@ -1,5 +1,5 @@
 /*!
- * live.js — 나만의 실시간 수업 엔진 v1.4.0
+ * live.js — 나만의 실시간 수업 엔진 v1.5.0
  * Copyright 2026 엘레나
  *
  * 처음부터 새로 작성한 코드입니다.
@@ -30,7 +30,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '1.4.0';
+  var VERSION = '1.5.0';
   var COPY = 'Copyright 2026 엘레나';
   var SB_CDN = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
   var QR_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';
@@ -88,7 +88,9 @@
   }
   function fit(el, max, min) {
     var s = max; el.style.fontSize = s + 'px';
-    for (var g = 0; g < 40 && s > min && (el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1); g++) {
+    // 글꼴에 따라 글자 아래가 몇 px 삐져나오는 건 넘침으로 치지 않아요
+    function over() { var tol = Math.max(3, s * 0.3); return el.scrollHeight > el.clientHeight + tol || el.scrollWidth > el.clientWidth + 2; }
+    for (var g = 0; g < 40 && s > min && over(); g++) {
       s = Math.max(min, s * 0.9); el.style.fontSize = s + 'px';
     }
   }
@@ -409,6 +411,14 @@
     '.lv-arrow{font-size:clamp(24px,6vmin,80px);background:none;border:none;color:var(--lv-sub);cursor:pointer;padding:0 1vmin}',
     '.lv-arrow:hover{color:var(--lv-fg)}',
     '.lv-pic{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;gap:.5em}',
+    '.lv-pre{position:absolute;inset:0;display:flex;flex-direction:column;gap:.6em}',
+    '.lv-pre .body{flex:1;min-height:0;display:flex;gap:clamp(8px,1.6vmin,20px)}',
+    '.lv-pre .pimg{flex:1.25;min-width:0;min-height:0;display:flex}',
+    '.lv-pre .pimg img{width:100%;height:100%;object-fit:contain;cursor:zoom-in;border-radius:.6em}',
+    '.lv-tiles{flex:1;min-width:0;min-height:0;display:grid;gap:clamp(8px,1.6vmin,18px);grid-auto-rows:1fr}',
+    '.lv-tile{background:var(--lv-p1);border:3px solid var(--lv-line);border-radius:1em;display:flex;align-items:center;gap:.5em;padding:.2em .7em;font-weight:700;line-height:1.25;word-break:keep-all;overflow:hidden;min-height:0}',
+    '.lv-tile .mk{font-size:1.15em}',
+    '.lv-pre .cap{color:var(--lv-sub);font-size:clamp(14px,2vmin,24px);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
     '.lv-pic img{flex:1;min-height:0;width:100%;object-fit:contain;cursor:zoom-in;border-radius:.6em}',
     '.lv-pic .cap{color:var(--lv-sub);font-size:clamp(14px,2vmin,26px);white-space:nowrap}',
     '.lv-zoom{padding:1.5vmin;cursor:zoom-out;background:#000}',
@@ -890,7 +900,7 @@
       });
     }
     var picMode = false;
-    function fitQ() { fit(qtext, Math.min(72, innerHeight * 0.066, innerWidth * 0.042), 14); }
+    function fitQ() { fit(qtext, Math.min(84, innerHeight * 0.08, innerWidth * 0.05), 14); }
     function renderStage() {
       var it = curItem();
       if (!it) { qtext.textContent = '문항이 없어요. 수업 HTML의 items에 문항을 넣어 주세요.'; return; }
@@ -933,10 +943,31 @@
       var A = S.answers[it.qid] || {};
       res.innerHTML = '';
       var keys = Object.keys(A);
+      var waitCap = keys.length ? '답 ' + keys.length + '개 · 📊 결과 보기를 누르면 결과가 나와요' : (S.open ? '학생들의 답을 기다리고 있어요…' + (it.img ? ' (그림을 누르면 화면 가득)' : '') : '"▶ 학생에게 열기"를 누르면 학생 화면에 이 문항이 나타나요');
+      // 고르기 문항은 답이 오기 전(또는 그림 크게 보기)에 보기를 크게 보여 줘요
+      if (it.type === 'choice' && (!keys.length || (picMode && it.img))) {
+        var land = res.clientWidth > res.clientHeight * 1.15;
+        var tiles = h('div', { class: 'lv-tiles' });
+        var cols = it.img ? (land ? 1 : 2) : (land && it.options.length > 2 ? 2 : 1);
+        if (it.img && land && it.options.length > 4) cols = 2;
+        tiles.style.gridTemplateColumns = 'repeat(' + cols + ',1fr)';
+        it.options.forEach(function (o, i) {
+          var cls = 'lv-tile', st = 'border-left:.45em solid ' + COLORS[i % COLORS.length];
+          if (S.reveal[it.qid]) { if (i === it.answer) { cls += ''; st += ';border-color:var(--lv-ok);background:#123a24'; } else st += ';opacity:.4'; }
+          tiles.appendChild(h('div', { class: cls, style: st }, [h('span', { class: 'mk', text: MARKS[i] }), h('span', { text: o })]));
+        });
+        var bodyKids = it.img ? [h('div', { class: 'pimg' }, [h('img', { src: it.img, alt: '', title: '누르면 화면 가득 크게', onclick: function () { zoomImg(it.img); } })]), tiles] : [tiles];
+        var bodyEl = h('div', { class: 'body' }, bodyKids);
+        if (it.img && !land) bodyEl.style.flexDirection = 'column';
+        res.appendChild(h('div', { class: 'lv-pre' }, [bodyEl, h('div', { class: 'cap', text: waitCap })]));
+        var tf = Math.min(60, innerHeight * 0.06, innerWidth * 0.04);
+        Array.prototype.forEach.call(tiles.children, function (t) { fit(t, tf, 12); });
+        return;
+      }
       if (picMode && it.img) {
         res.appendChild(h('div', { class: 'lv-pic' }, [
           h('img', { src: it.img, alt: '', title: '누르면 화면 가득 크게', onclick: function () { zoomImg(it.img); } }),
-          h('div', { class: 'cap', text: keys.length ? '답 ' + keys.length + '개 · 📊 결과 보기를 누르면 결과가 나와요' : (S.open ? '학생들의 답을 기다리고 있어요… (그림을 누르면 화면 가득)' : '"▶ 학생에게 열기"를 누르면 학생 화면에 이 문항이 나타나요') })
+          h('div', { class: 'cap', text: waitCap })
         ]));
         return;
       }

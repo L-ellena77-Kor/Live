@@ -9,7 +9,7 @@
      형성평가 문항을 입력하면 저장소에 올리기만 하면 되는 실시간 수업 파일(.html)을 만들어 줍니다.
      입력한 내용과 그림은 이 컴퓨터 안에서만 처리되고 어디로도 보내지 않아요. -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
-<script src="live.js?v=1.4.0"></script><!-- 엔진 버전 번호만 읽어 와요 -->
+<script>(function(){var t=Date.now()/6e5|0;document.write('<script src="live.js?t='+t+'"><\/script>')})();</script><!-- 엔진 버전 번호만 읽어 와요 -->
 <style>
 :root{--bg:#0d1117;--p1:#161b23;--p2:#1f2630;--line:#2c3542;--fg:#eef3f8;--sub:#9aa7b6;--ac:#4cc2ff;--ok:#5ee08a;--bad:#ff6b7d;--warn:#ffc24b}
 *{box-sizing:border-box}
@@ -323,7 +323,7 @@ textarea.in{resize:vertical;min-height:3.2em;line-height:1.4}
   };
   // 수업 파일 내용 만들기 (pv: 미리보기용이면 빈 칸을 안내 글로 채움)
   function build(pv) {
-    var v = (window.Live && Live.version) || '1.4.0';
+    var v = (window.Live && Live.version) || '1.5.0';
     var data = {
       id: D.file || 'preview', title: D.title.trim() || (pv ? '(수업 제목)' : ''),
       items: D.items.map(function (it, i) {
@@ -339,7 +339,7 @@ textarea.in{resize:vertical;min-height:3.2em;line-height:1.4}
       '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n<meta name="theme-color" content="#0d1117">\n' +
       '<title>' + esc(data.title) + '</title>\n<' + '!-- Copyright 2026 엘레나 · 퀴즈 만들기(maker.html)로 만든 파일 · 고칠 때는 퀴즈 만들기의 📂 불러오기를 쓰세요 -->\n' +
       '<style>html,body{background:#0d1117;margin:0}</style>\n</head>\n<body>\n' +
-      '<' + 'script src="live-config.js?v=' + v + '"><' + '/script>\n<' + 'script src="live.js?v=' + v + '"><' + '/script>\n' +
+      '<' + 'script>/* 늘 최신 엔진을 불러와요 (엔진 ' + v + '로 만듦) */(function(){var t=Date.now()/6e5|0;document.write(\'<\'+\'script src="live-config.js?t=\'+t+\'"><\\/script><\'+\'script src="live.js?t=\'+t+\'"><\\/script>\')})();<' + '/script>\n' +
       '<' + 'script type="application/json" id="quiz-data">' + json + '<' + '/script>\n' +
       '<' + 'script>Live.start(JSON.parse(document.getElementById(\'quiz-data\').textContent));<' + '/script>\n</body>\n</html>\n';
     return html;
