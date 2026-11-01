@@ -124,6 +124,7 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);overflow:hid
     qcue.classList.toggle('on', !student && nq > 0);
     if (fresh && !student && nq > 0) { bar.classList.remove('away'); hint('📡 이 쪽에 학생 질문이 ' + nq + '개 있어요 · Q 또는 노란 단추', 2600); }
     var ms = maxStep(cur);
+    if (!student && window.Live && Live.pageChanged) Live.pageChanged();   // 함께 넘기기
     num.innerHTML = '';
     num.appendChild(document.createTextNode((cur + 1) + ' / ' + N));
     if (ms > 0) { var sm = document.createElement('small'); sm.textContent = Array(step + 1).join('●') + Array(ms - step + 1).join('○'); num.appendChild(sm); }
@@ -218,8 +219,15 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);overflow:hid
     mountBefore: '#fs',
     backLabel: '슬라이드',
     studentSim: true,
+    follow: true,                                   // 선생님이 넘기면 학생 화면도 같이 넘어가요 (🔗 단추로 끄고 켜기)
     pageOf: function () { return cur; },
-    goPage: function (n) { if (n >= 0 && n < N) go(n); },
+    stepOf: function () { return step; },
+    goPage: function (n, k) {
+      if (!(n >= 0 && n < N)) return;
+      if (n !== cur) go(n);
+      var s2 = Math.min(k || 0, maxStep(n));
+      if (s2 !== step) { step = s2; draw(false); }
+    },
     items: D.items
   }); }
 })();

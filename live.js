@@ -1,5 +1,5 @@
 /*!
- * live.js — 나만의 실시간 수업 엔진 v1.5.1
+ * live.js — 나만의 실시간 수업 엔진 v1.6.0
  * Copyright 2026 엘레나
  *
  * 처음부터 새로 작성한 코드입니다.
@@ -30,7 +30,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '1.5.1';
+  var VERSION = '1.6.0';
   var COPY = 'Copyright 2026 엘레나';
   var SB_CDN = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
   var QR_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';
@@ -546,15 +546,32 @@
       }
       root.classList.toggle('lv-hide', !on);
       if (on) renderAll();
+      if (follow) sendState();                         // 학생 화면도 질문 창 ↔ 수업 화면을 같이 바꿔요
     }
     function panelOn() { return !root.classList.contains('lv-hide'); }
     // 학생들 시뮬레이션을 선생님이 보고 있는 쪽으로 옮기기 (그 뒤엔 학생이 자유롭게 넘겨 볼 수 있음)
-    function pushPage() {
-      if (!net) { toast('먼저 서버에 연결해 주세요'); return; }
-      var pg = lesson.pageOf ? lesson.pageOf() : 0;
-      S.go = { p: pg, s: ((S.go && S.go.s) || 0) + 1 }; save(); sendState();
-      toast('학생 화면을 ' + (pg + 1) + '쪽으로 옮겼어요');
+    function pushPage(silent) {
+      if (!net) { if (!silent) toast('먼저 서버에 연결해 주세요'); return; }
+      var pg = lesson.pageOf ? lesson.pageOf() : 0, st = lesson.stepOf ? lesson.stepOf() : 0;
+      if (silent && S.go && S.go.p === pg && S.go.k === st) return;
+      S.go = { p: pg, k: st, s: ((S.go && S.go.s) || 0) + 1 }; save(); sendState();
+      if (!silent) toast('학생 화면을 ' + (pg + 1) + '쪽으로 옮겼어요');
     }
+    /* 함께 넘기기: 선생님이 쪽(또는 클릭 단계)을 넘기면 학생 화면도 따라와요 (lesson.follow 일 때) */
+    var canFollow = embed && !!lesson.studentSim && !!lesson.follow;
+    var follow = canFollow && LS.get('lv-follow', true) !== false;
+    var followTm = 0;
+    Live.pageChanged = function () { if (follow) { clearTimeout(followTm); followTm = setTimeout(function () { pushPage(true); }, 120); } };
+    var followBtns = [];
+    function followBtn() {
+      var b = h('button', { class: 'lv-btn', title: '켜 두면 선생님이 넘기는 대로 학생 화면도 같이 넘어가요', onclick: function () {
+        follow = !follow; LS.set('lv-follow', follow); syncFollow();
+        if (follow) { pushPage(true); sendState(); toast('함께 넘기기 켬 · 학생 화면이 선생님을 따라와요'); }
+        else toast('함께 넘기기 끔 · 학생이 자유롭게 넘겨 봐요');
+      } });
+      followBtns.push(b); return b;
+    }
+    function syncFollow() { followBtns.forEach(function (b) { b.textContent = follow ? '🔗 함께 넘기기' : '🔓 따로 보기'; b.classList.toggle('on', follow); }); }
     // 수업 페이지(시뮬레이션)의 키보드 단축키가 실시간 창에서 눌린 키에 반응하지 않게
     root.addEventListener('keydown', function (e) { e.stopPropagation(); });
 
@@ -618,7 +635,7 @@
       editable ? h('button', { class: 'lv-btn lv-icon', title: '이 퀴즈 고치기 (퀴즈 만들기에서 열기)', text: '✏️', onclick: function () { window.open('maker.html#edit=' + encodeURIComponent(myFile), '_blank'); } }) : null,
       h('button', { class: 'lv-btn lv-icon', title: '설정', text: '⚙', onclick: function () { showCfg(true); } }),
       fsButton(),
-      embed && lesson.studentSim ? h('button', { class: 'lv-btn', text: '👀 학생도 이 쪽', title: '학생들 시뮬레이션을 지금 쪽으로 옮기기', onclick: pushPage }) : null,
+      embed && lesson.studentSim ? (canFollow ? followBtn() : h('button', { class: 'lv-btn', text: '👀 학생도 이 쪽', title: '학생들 시뮬레이션을 지금 쪽으로 옮기기', onclick: function () { pushPage(); } })) : null,
       embed ? h('button', { class: 'lv-btn pri', text: (lesson.backLabel || '수업 화면') + ' ✕', title: '실시간 창 닫기', onclick: function () { panel(false); } }) : null
     ]);
 
@@ -627,7 +644,7 @@
     if (embed) {
       var fab = h('span', { class: 'lv-fab' }, [
         h('button', { class: 'lv-btn', title: 'QR 크게 보기', onclick: function () { if (!cfg) showCfg(true); else showQR(true); } }, [fabDot, ' 👥', fabCnt, ' · ', fabCode]),
-        lesson.studentSim ? h('button', { class: 'lv-btn', text: '👀 학생도 이 쪽', title: '학생들 시뮬레이션을 지금 쪽으로 옮기기', onclick: pushPage }) : null,
+        lesson.studentSim ? (canFollow ? followBtn() : h('button', { class: 'lv-btn', text: '👀 학생도 이 쪽', title: '학생들 시뮬레이션을 지금 쪽으로 옮기기', onclick: function () { pushPage(); } })) : null,
         h('button', { class: 'lv-btn pri', text: '📡 질문', title: '실시간 질문 창 열기', onclick: function () { panel(true); } })
       ]);
       var host = lesson.mountBefore && $(lesson.mountBefore);   // 이 요소 바로 앞에 단추를 넣어요
@@ -635,6 +652,7 @@
       else { fab.classList.add('float'); document.body.appendChild(fab); }
     }
 
+    syncFollow();
     var list = h('div', { class: 'lv-list' });
     var qnum = h('div', { class: 'lv-qnum' });
     var qtext = h('div', { class: 'lv-qtext' });
@@ -825,7 +843,7 @@
       var it = curItem();
       S.seq = Math.max(S.seq + 1, Date.now()); save();
       var d = {
-        seq: S.seq, title: lesson.title || '', total: items.length, go: S.go || null,
+        seq: S.seq, title: lesson.title || '', total: items.length, go: S.go || null, view: follow ? (panelOn() ? 'q' : 'sim') : null,
         cur: it ? { qid: it.qid, n: S.cur + 1, type: it.type, q: it.q, img: it.img && it.img.length < 2000 ? it.img : null, options: it.options || null, open: !!S.open, ans: S.reveal[it.qid] ? it.answer : null, ex: it.type === 'text' && S.reveal[it.qid] ? it.example : null } : null
       };
       var str = JSON.stringify(d);
@@ -1167,6 +1185,7 @@
     root.appendChild(body);
     root.appendChild(h('div', { class: 'lv-copy', text: COPY }));
 
+    var lastView = null;
     var net = null, verify = null, lastSeq = 0, lastGo = 0, popped = '', state = null, gotState = false, myAns = SS.get('lv-my:' + code, {}), pending = null, hiTimer = null;
 
     function screen(kids) { body.innerHTML = ''; kids.forEach(function (k) { if (k) body.appendChild(k); }); }
@@ -1248,8 +1267,14 @@
           if (changed) render();
           if (sim && d.go && d.go.s > lastGo) {            // 선생님이 "학생도 이 쪽"을 눌렀어요
             lastGo = d.go.s;
-            try { lesson.goPage && lesson.goPage(d.go.p); } catch (e) {}
-            if (!(d.cur && d.cur.open && !myAns[d.cur.qid])) overlay(false);
+            try { lesson.goPage && lesson.goPage(d.go.p, d.go.k || 0); } catch (e) {}
+            if (d.view === 'sim' || !(d.cur && d.cur.open && !myAns[d.cur.qid])) overlay(false);
+          }
+          // 함께 넘기기: 선생님이 질문 창을 닫고 수업 화면으로 가면 학생도 수업 화면으로
+          if (sim && d.view && d.view !== lastView) {
+            if (d.view === 'sim' && lastView) overlay(false);
+            else if (d.view === 'q' && lastView === 'sim' && d.cur && d.cur.open) overlay(true);
+            lastView = d.view;
           }
           ping();
         });
