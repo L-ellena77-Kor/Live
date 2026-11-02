@@ -49,6 +49,9 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);overflow:hid
 #qcue{display:none;font-weight:800;color:#04131c;background:#ffd54a;border-color:#ffd54a;animation:qc 1.4s ease-in-out infinite}
 #qcue.on{display:inline-block}
 @keyframes qc{0%,100%{box-shadow:0 0 0 0 #ffd54a99}50%{box-shadow:0 0 0 .45em transparent}}
+body.locked #prev,body.locked #next,body.locked #gridBtn{display:none}
+body.locked #num{pointer-events:none}
+body.locked #slide{cursor:default}
 #hint{position:fixed;left:50%;top:6vh;transform:translateX(-50%);z-index:20;background:#000c;border:1px solid var(--line);color:var(--fg);padding:.6em 1.1em;border-radius:.8em;font-size:clamp(15px,2.4vmin,26px);white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .3s}
 #hint.on{opacity:1}
 </style>
@@ -79,7 +82,7 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);overflow:hid
   if (D.aspect === '4:3') { document.getElementById('slide').classList.add('r43'); document.body.classList.add('r43'); }
   var hq = new URLSearchParams(location.hash.slice(1));
   var student = hq.has('join') || hq.has('s');
-  var cur = 0, step = 0;
+  var cur = 0, step = 0, locked = false;   // locked: 학생 화면이 선생님 화면에 고정됨(함께 넘기기)
   var slide = document.getElementById('slide'), pg = document.getElementById('pg');
   var num = document.getElementById('num'), bar = document.getElementById('bar');
   var grid = document.getElementById('grid'), thumbs = document.getElementById('thumbs');
@@ -139,14 +142,15 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);overflow:hid
     if (i < 0 || i >= N) return;
     cur = i; step = atEnd ? maxStep(i) : 0; draw(true);
   }
-  function next() { if (step < maxStep(cur)) { step++; draw(false); } else go(cur + 1); }
-  function prev() { if (step > 0) { step--; draw(false); } else go(cur - 1, true); }
+  function next() { if (locked) return; if (step < maxStep(cur)) { step++; draw(false); } else go(cur + 1); }
+  function prev() { if (locked) return; if (step > 0) { step--; draw(false); } else go(cur - 1, true); }
 
   var hintTm;
   function hint(t, ms) { var e = document.getElementById('hint'); e.textContent = t; e.classList.add('on'); clearTimeout(hintTm); hintTm = setTimeout(function () { e.classList.remove('on'); }, ms || 2000); }
 
   /* 모든 쪽 보기 */
   function openGrid() {
+    if (locked) return;
     thumbs.innerHTML = '';
     SL.forEach(function (s, i) {
       var b = document.createElement('button'); b.className = 'th' + (i === cur ? ' cur' : '');
@@ -226,6 +230,7 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);overflow:hid
     follow: true,                                   // 선생님이 넘기면 학생 화면도 같이 넘어가요 (🔗 단추로 끄고 켜기)
     pageOf: function () { return cur; },
     stepOf: function () { return step; },
+    onLock: function (l) { locked = l; document.body.classList.toggle('locked', l); if (l) grid.classList.remove('on'); },
     goPage: function (n, k) {
       if (!(n >= 0 && n < N)) return;
       if (n !== cur) go(n);

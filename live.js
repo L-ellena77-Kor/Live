@@ -1,5 +1,5 @@
 /*!
- * live.js — 나만의 실시간 수업 엔진 v1.6.1
+ * live.js — 나만의 실시간 수업 엔진 v1.7.0
  * Copyright 2026 엘레나
  *
  * 처음부터 새로 작성한 코드입니다.
@@ -30,7 +30,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '1.6.1';
+  var VERSION = '1.7.0';
   var COPY = 'Copyright 2026 엘레나';
   var SB_CDN = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
   var QR_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';
@@ -550,11 +550,11 @@
     }
     function panelOn() { return !root.classList.contains('lv-hide'); }
     // 학생들 시뮬레이션을 선생님이 보고 있는 쪽으로 옮기기 (그 뒤엔 학생이 자유롭게 넘겨 볼 수 있음)
-    function pushPage(silent) {
+    function pushPage(silent, force) {
       if (!net) { if (!silent) toast('먼저 서버에 연결해 주세요'); return; }
       var pg = lesson.pageOf ? lesson.pageOf() : 0, st = lesson.stepOf ? lesson.stepOf() : 0;
-      if (silent && S.go && S.go.p === pg && S.go.k === st) return;
-      S.go = { p: pg, k: st, s: ((S.go && S.go.s) || 0) + 1 }; save(); sendState();
+      if (silent && !force && S.go && S.go.p === pg && S.go.k === st) return;
+      S.go = { p: pg, k: st, s: Math.max(((S.go && S.go.s) || 0) + 1, Date.now()) }; save(); sendState();
       if (!silent) toast('학생 화면을 ' + (pg + 1) + '쪽으로 옮겼어요');
     }
     /* 함께 넘기기: 선생님이 쪽(또는 클릭 단계)을 넘기면 학생 화면도 따라와요 (lesson.follow 일 때) */
@@ -567,7 +567,7 @@
       var b = h('button', { class: 'lv-btn', title: '켜 두면 선생님이 넘기는 대로 학생 화면도 같이 넘어가요', onclick: function () {
         follow = !follow; LS.set('lv-follow', follow); syncFollow();
         if (follow) { pushPage(true); sendState(); toast('함께 넘기기 켬 · 학생 화면이 선생님을 따라와요'); }
-        else toast('함께 넘기기 끔 · 학생이 자유롭게 넘겨 봐요');
+        else { sendState(); toast('함께 넘기기 끔 · 학생이 자유롭게 넘겨 봐요'); }
       } });
       followBtns.push(b); return b;
     }
@@ -833,7 +833,7 @@
       p.then(function () {
         codeEl.textContent = fabCode.textContent = S.code;
         return connect(cfg, S.code, onMsg, setStatus);
-      }).then(function (n) { net = n; sendState(); }, function (e) { setStatus('err'); toast(e.message, 4000); });
+      }).then(function (n) { net = n; if (follow) pushPage(true, true); sendState(); }, function (e) { setStatus('err'); toast(e.message, 4000); });
       renderAll();
     }
 
@@ -855,7 +855,7 @@
       var now = Date.now();
       var first = !seen[m.sid] || now - seen[m.sid] > 40000;
       seen[m.sid] = now;
-      if (m.t === 'hi') { if (m.need || first) sendState(); updCount(); return; }
+      if (m.t === 'hi') { if (m.need || first || follow) sendState(); updCount(); return; }   // 함께 넘기기 중엔 늘 지금 화면을 다시 알려 줘요
       if (m.t !== 'ans') return;
       var it = curItem();
       if (!it || m.qid !== it.qid || !S.open) { net.send({ t: 'nack', sid: m.sid, qid: m.qid }); return; }
@@ -1153,6 +1153,7 @@
     var root = boot(lesson.title, { full: !sim, hideHost: !sim, colors: lesson.colors });
     root.addEventListener('keydown', function (e) { e.stopPropagation(); });
     function overlay(on) { if (sim) { root.classList.toggle('lv-hide', !on); fabQ && fabQ.classList.remove('lv-ping'); if (!on) ping(); } }
+    var backBtn;
     function overlayOn() { return !root.classList.contains('lv-hide'); }
     var sid = SS.get('lv-sid', null);
     if (!sid) { sid = rand(10); SS.set('lv-sid', sid); }
@@ -1167,7 +1168,7 @@
     var dot = h('span', { class: 'lv-dot' });
     var codeChip = h('span', { class: 'lv-chip' }, [dot, ' ', h('span', { class: 'lv-code', text: code || '------' })]);
     root.appendChild(h('div', { class: 'lv-bar' }, [titleEl, codeChip, fsButton(),
-      sim ? h('button', { class: 'lv-btn pri', text: (lesson.backLabel || '수업 화면') + ' ✕', onclick: function () { overlay(false); } }) : null]));
+      sim ? (backBtn = h('button', { class: 'lv-btn pri', text: (lesson.backLabel || '수업 화면') + ' ✕', onclick: function () { overlay(false); } })) : null]));
     var fabQ = null, fabDot = h('span', { class: 'lv-dot' });
     if (sim) {
       fabQ = h('button', { class: 'lv-btn pri', text: '📡 질문', title: '선생님 질문 보기', onclick: function () { overlay(true); } });
@@ -1185,7 +1186,7 @@
     root.appendChild(body);
     root.appendChild(h('div', { class: 'lv-copy', text: COPY }));
 
-    var lastView = null;
+    var lastView = null, locked = false;   // backBtn은 위에서 이미 만들었어요
     var net = null, verify = null, lastSeq = 0, lastGo = 0, popped = '', state = null, gotState = false, myAns = SS.get('lv-my:' + code, {}), pending = null, hiTimer = null;
 
     function screen(kids) { body.innerHTML = ''; kids.forEach(function (k) { if (k) body.appendChild(k); }); }
@@ -1265,15 +1266,22 @@
           var changed = !state || !state.cur || !d.cur || state.cur.qid !== d.cur.qid || state.cur.open !== d.cur.open || state.cur.ans !== d.cur.ans || state.cur.ex !== d.cur.ex;
           state = d;
           if (changed) render();
-          if (sim && d.go && d.go.s > lastGo) {            // 선생님이 "학생도 이 쪽"을 눌렀어요
+          // 함께 넘기기(d.view가 있음): 학생 화면을 선생님 화면에 고정 — 학생은 넘기거나 닫을 수 없어요
+          var nl = sim && !!d.view;
+          if (nl !== locked) {
+            locked = nl;
+            if (backBtn) backBtn.style.display = locked ? 'none' : '';
+            if (fabQ) fabQ.style.display = locked ? 'none' : '';
+            try { lesson.onLock && lesson.onLock(locked); } catch (e) {}
+          }
+          if (locked) {
+            if (d.go) { lastGo = d.go.s; try { lesson.goPage && lesson.goPage(d.go.p, d.go.k || 0); } catch (e) {} }
+            if (overlayOn() !== (d.view === 'q')) overlay(d.view === 'q');
+            lastView = d.view;
+          } else if (sim && d.go && d.go.s > lastGo) {     // 선생님이 "학생도 이 쪽"을 눌렀어요
             lastGo = d.go.s;
             try { lesson.goPage && lesson.goPage(d.go.p, d.go.k || 0); } catch (e) {}
-            if (!d.view && !(d.cur && d.cur.open && !myAns[d.cur.qid])) overlay(false);
-          }
-          // 함께 넘기기: 선생님 화면이 질문 창이면 학생도 질문 창, 수업 화면이면 학생도 수업 화면
-          if (sim && d.view && d.view !== lastView) {
-            overlay(d.view === 'q');
-            lastView = d.view;
+            if (!(d.cur && d.cur.open && !myAns[d.cur.qid])) overlay(false);
           }
           ping();
         });
