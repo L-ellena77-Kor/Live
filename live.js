@@ -1,5 +1,5 @@
 /*!
- * live.js — 나만의 실시간 수업 엔진 v1.7.1
+ * live.js — 나만의 실시간 수업 엔진 v1.8.0
  * Copyright 2026 엘레나
  *
  * 처음부터 새로 작성한 코드입니다.
@@ -18,11 +18,13 @@
  *   - 선생님 화면의 신호에는 전자서명(ECDSA)을 붙여, 학생이 F12로 가짜 문제를
  *     뿌려도 다른 학생 화면이 바뀌지 않게 합니다.
  *
- * v1.7.1 (2026-11-07)
- *   - 함께 넘기기 중 주고받는 양을 크게 줄임: 학생 신호마다 반 전체에 다시 방송하던 것을
- *     처음 들어온 학생에게만 바로, 나머지는 8초에 한 번만 (Supabase 무료 한도 초과로 선생님 화면이 끊기던 문제)
- *   - 연결이 끊기면 선생님·학생 모두 저절로 다시 연결 (1초→2초→4초… 최대 30초 간격)
- *   - 들어온 학생 수: 같은 크롬북의 탭 여러 개는 한 명으로, 탭을 닫으면 바로 빠짐
+ * ■ 무료 한도 아껴 쓰기 (v1.8.0)
+ *   Supabase는 메시지 1개가 방 안의 사람 수만큼 전달되면 그만큼 센다.
+ *   - 통로를 둘로 나눔: 선생님 → 모두(lv-코드), 학생 → 선생님만(lv-코드-u)
+ *     학생의 "들어왔어요"·답은 다른 학생에게 전달되지 않음
+ *   - 학생 "들어왔어요" 신호: 15초 → 60초마다
+ *   - 선생님 화면 상태: 바뀔 때 + 20~45초마다 한 번 (학생마다 다시 보내지 않음)
+ *   - 도착 확인: 0.4초 동안 모아서 한 번에
  *
  * 사용법 1 — 문항만 있는 수업:
  *   <script src="live.js"></script>
@@ -36,11 +38,13 @@
 (function () {
   'use strict';
 
-  var VERSION = '1.7.1';
+  var VERSION = '1.8.0';
   var COPY = 'Copyright 2026 엘레나';
   var SB_CDN = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
   var QR_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';
   var MAX_TEXT = 400;
+  var HI_EVERY = 60000;        // 학생 "들어왔어요" 신호 간격
+  var ALIVE = 150000;          // 이 시간 안에 신호가 있으면 "들어온 학생"으로 셈
   var COLORS = ['#4cc2ff', '#ffb547', '#7ee081', '#ff7a90', '#b58cff', '#5eead4', '#f9e26b', '#fb923c'];
   var MARKS = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧'];
 
@@ -285,8 +289,14 @@
 
   /* ───────────── 주고받기 통로 ─────────────
    * Supabase Realtime Broadcast(저장 없음) 또는
-   * 연습 모드(같은 컴퓨터 브라우저 탭끼리만, 인터넷 안 씀)                */
-  function connect(cfg, code, onMsg, onStatus) {
+   * 연습 모드(같은 컴퓨터 브라우저 탭끼리만, 인터넷 안 씀)
+   *
+   * 통로 두 개 (무료 한도 아끼기):
+   *   lv-코드    선생님 → 모두   (문항·화면 상태, 도착 확인)   학생·선생님이 들어와 있음
+   *   lv-코드-u  학생 → 선생님만 (들어왔어요, 답)            선생님만 들어와 있음
+   *   학생은 -u 통로에 들어가지 않고 보내기만 해요(REST). 그래서 한 학생의 신호가
+   *   반 전체에 퍼지지 않고 선생님 한 사람에게만 전달돼요.                    */
+  function connect(cfg, code, onMsg, onStatus, role) {
     if (cfg.demo) {
       var bc = new BroadcastChannel('lv-demo-' + code);
       bc.onmessage = function (e) { onMsg(e.data); };
@@ -299,38 +309,41 @@
         auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
         realtime: { params: { eventsPerSecond: 40 } }
       });
-      // 끊기면 저절로 다시 연결 (1초→2초→4초… 최대 30초). 한 번이라도 연결됐었다면 끊긴 동안은 노란 점(wait)
-      var ch = null, closed = false, tries = 0, rt = null, wasOk = false;
-      function open() {
-        if (closed) return;
-        if (ch) { try { client.removeChannel(ch); } catch (e) {} }
-        var me = ch = client.channel('lv-' + code, { config: { broadcast: { self: false, ack: false } } });
-        me.on('broadcast', { event: 'm' }, function (e) { if (me === ch) onMsg(e.payload); });
-        onStatus('wait');
-        me.subscribe(function (st) {
-          if (me !== ch || closed) return;
-          if (st === 'SUBSCRIBED') { tries = 0; wasOk = true; onStatus('ok'); }
-          else if (st === 'CHANNEL_ERROR' || st === 'TIMED_OUT' || st === 'CLOSED') { onStatus(wasOk ? 'wait' : 'err'); retry(); }
-        });
+      var teacher = role === 't';
+      var opt = { config: { broadcast: { self: false, ack: false } } };
+      var down = client.channel('lv-' + code, opt);
+      var up = client.channel('lv-' + code + '-u', opt);
+      var st = { d: '', u: teacher ? '' : 'SUBSCRIBED' };
+      function report() {
+        var a = st.d, b = st.u;
+        if (a === 'SUBSCRIBED' && b === 'SUBSCRIBED') onStatus('ok');
+        else if (/CHANNEL_ERROR|TIMED_OUT/.test(a + ' ' + b)) onStatus('err');
+        else if (a === 'CLOSED' || b === 'CLOSED') onStatus('off');
+        else onStatus('wait');
       }
-      function retry() {
-        if (closed || rt) return;
-        var d = Math.min(30000, 1000 * Math.pow(2, tries++)) + Math.random() * 1000;   // 여러 명이 한꺼번에 다시 붙지 않게 조금씩 흩어서
-        rt = setTimeout(function () { rt = null; open(); }, d);
+      function listen(ch) { ch.on('broadcast', { event: 'm' }, function (e) { onMsg(e.payload); }); }
+      function wsSend(ch, m) { try { var r = ch.send({ type: 'broadcast', event: 'm', payload: m }); if (r && r.catch) r.catch(function () {}); } catch (e) {} }
+      listen(down);
+      if (teacher) listen(up);                     // 옛 버전 학생이 lv-코드로 보낸 것도 계속 받아요
+      onStatus('wait');
+      down.subscribe(function (s) { st.d = s; report(); });
+      if (teacher) up.subscribe(function (s) { st.u = s; report(); });
+
+      // 학생: -u 통로에 들어가지 않고 REST로 보내기. 안 되면 그때만 들어가서 보내요
+      var upJoined = false;
+      function joinUp() { if (upJoined) return; upJoined = true; try { up.subscribe(function () {}); } catch (e) {} }
+      function upSend(m) {
+        if (upJoined) { wsSend(up, m); return; }
+        var r;
+        try { r = typeof up.httpSend === 'function' ? up.httpSend('m', m) : up.send({ type: 'broadcast', event: 'm', payload: m }); }
+        catch (e) { r = Promise.reject(e); }
+        Promise.resolve(r).then(function (x) {
+          if (x === 'error' || x === 'timed out' || (x && x.success === false)) throw new Error('send');
+        }).catch(function () { joinUp(); setTimeout(function () { wsSend(up, m); }, 1500); });
       }
-      function now() { if (rt) { clearTimeout(rt); rt = null; } tries = 0; open(); }
-      function online() { if (rt) now(); }
-      function wake() { if (document.visibilityState === 'visible' && rt) now(); }   // 크롬북 덮개를 열었을 때
-      window.addEventListener('online', online);
-      document.addEventListener('visibilitychange', wake);
-      open();
       return {
-        send: function (m) { try { var r = ch && ch.send({ type: 'broadcast', event: 'm', payload: m }); if (r && r.catch) r.catch(function () {}); } catch (e) {} },
-        close: function () {
-          closed = true; if (rt) clearTimeout(rt);
-          window.removeEventListener('online', online); document.removeEventListener('visibilitychange', wake);
-          try { client.removeChannel(ch); } catch (e) {}
-        }
+        send: teacher ? function (m) { wsSend(down, m); } : upSend,
+        close: function () { try { client.removeChannel(down); } catch (e) {} try { client.removeChannel(up); } catch (e) {} }
       };
     });
   }
@@ -550,7 +563,7 @@
     var cfg = LS.get(CFGKEY, null);
     if (!cfg && window.LIVE_CONFIG && window.LIVE_CONFIG.url && window.LIVE_CONFIG.key) cfg = { url: LIVE_CONFIG.url, key: LIVE_CONFIG.key, fromFile: true };
     var S = LS.get(KEY, null);
-    var net = null, sign = null, status = 'off', seen = {}, who = {}, stagger = 0, lastSent = 0, soonTm = null;
+    var net = null, sign = null, status = 'off', seen = {}, stagger = 0;
 
     function fresh() {
       return { go: { p: 0, s: 0 }, code: code6(), keys: null, cur: 0, open: false, reveal: {}, veil: false, showMeta: false, answers: {}, seq: Date.now(), started: Date.now() };
@@ -846,14 +859,11 @@
 
     /* 연결 */
     function setStatus(st) {
-      var before = status;
       status = st; dot.className = fabDot.className = 'lv-dot ' + st;
-      dot.title = { ok: '연결됨', wait: '연결 중… (끊기면 저절로 다시 연결해요)', err: '연결 오류 — 주소·키·Realtime 설정을 확인하세요', off: '끊김' }[st] || '';
-      if (st === 'ok') { sendState(); if (before === 'wait' && everOk) toast('다시 연결됐어요'); everOk = true; }
-      if (st === 'err' && before !== 'err') toast('서버 연결 오류: 설정의 주소·공개 키를 확인해 주세요', 4000);
-      if (st === 'wait' && before === 'ok') toast('연결이 잠깐 끊겼어요 · 저절로 다시 연결하는 중…', 3000);
+      dot.title = { ok: '연결됨', wait: '연결 중…', err: '연결 오류 — 주소·키·Realtime 설정을 확인하세요', off: '끊김' }[st] || '';
+      if (st === 'ok') sendState();
+      if (st === 'err') toast('서버 연결 오류: 설정의 주소·공개 키를 확인해 주세요', 4000);
     }
-    var everOk = false;
     function start() {
       if (net) { net.close(); net = null; }
       var p = Promise.resolve();
@@ -862,17 +872,19 @@
         .catch(function () { sign = null; });
       p.then(function () {
         codeEl.textContent = fabCode.textContent = S.code;
-        return connect(cfg, S.code, onMsg, setStatus);
+        return connect(cfg, S.code, onMsg, setStatus, 't');
       }).then(function (n) { net = n; if (follow) pushPage(true, true); sendState(); }, function (e) { setStatus('err'); toast(e.message, 4000); });
       renderAll();
     }
 
     function curItem() { return items[S.cur]; }
+    var askTm = null, lastSent = 0;
     function sendState() {
       if (!net) return;
+      if (askTm) { clearTimeout(askTm); askTm = null; }
+      lastSent = Date.now();
       var it = curItem();
       S.seq = Math.max(S.seq + 1, Date.now()); save();
-      lastSent = Date.now(); if (soonTm) { clearTimeout(soonTm); soonTm = null; }
       var d = {
         seq: S.seq, title: lesson.title || '', total: items.length, go: S.go || null, view: follow ? (panelOn() ? 'q' : 'sim') : null,
         cur: it ? { qid: it.qid, n: S.cur + 1, type: it.type, q: it.q, img: it.img && it.img.length < 2000 ? it.img : null, options: it.options || null, open: !!S.open, ans: S.reveal[it.qid] ? it.answer : null, ex: it.type === 'text' && S.reveal[it.qid] ? it.example : null } : null
@@ -880,31 +892,36 @@
       var str = JSON.stringify(d);
       (sign ? sign(str) : Promise.resolve(null)).then(function (sig) { net && net.send({ t: 'state', d: str, sig: sig }); });
     }
-
-    // 학생 신호에 답하는 방송은 모아서 (30명이 한꺼번에 들어와도 0.4초에 한 번)
-    function stateSoon() {
-      if (soonTm) return;
-      var wait = Math.max(0, 400 - (Date.now() - lastSent));
-      soonTm = setTimeout(function () { soonTm = null; sendState(); }, wait);
+    // 학생이 "화면 정보가 필요해요"라고 하면: 여러 명이 한꺼번에 들어와도 0.7초에 한 번만 보내요
+    function askState() { if (!askTm) askTm = setTimeout(function () { askTm = null; sendState(); }, 700); }
+    // 화면이 안 바뀌어도 가끔 한 번씩 보내서, 신호를 놓친 학생 화면을 바로잡아요
+    setInterval(function () {
+      if (net && status === 'ok' && liveCount() && Date.now() - lastSent > (follow ? 20000 : 45000)) sendState();
+    }, 5000);
+    // 도착 확인은 0.4초 동안 모아서 한 번에 보내요 (학생 30명이 동시에 내도 메시지 1~2개)
+    var ackQ = [], ackTm = null;
+    function ack(ok, sid, qid) {
+      ackQ.push([ok ? 1 : 0, sid, qid]);
+      if (!ackTm) ackTm = setTimeout(function () {
+        ackTm = null; var l = ackQ; ackQ = [];
+        if (net && l.length) net.send({ t: 'acks', a: l });
+      }, 400);
     }
+
     function onMsg(m) {
       if (!m || typeof m !== 'object' || typeof m.sid !== 'string' || m.sid.length > 20) return;
       var now = Date.now();
-      var first = !seen[m.sid] || now - seen[m.sid] > 40000;
+      var first = !seen[m.sid] || now - seen[m.sid] > ALIVE - 20000;
       seen[m.sid] = now;
-      var dev = typeof m.d === 'string' && m.d.length <= 20 ? m.d : '';
-      who[m.sid] = dev || (who[m.sid] || m.sid);                 // 같은 크롬북의 탭들은 한 명으로 세기
-      if (m.t === 'bye') { delete seen[m.sid]; delete who[m.sid]; updCount(); return; }   // 탭을 닫았어요
       if (m.t === 'hi') {
-        // 새로 들어온 학생·화면을 못 받은 학생에게는 바로, 함께 넘기기 중 나머지는 8초에 한 번만 다시 알려 줘요
-        // (예전엔 학생 신호마다 반 전체에 방송해서 30명이면 1초에 수십 건 → Supabase 한도에 걸려 끊겼어요)
-        if (m.need || first) stateSoon();
-        else if (follow && now - lastSent > 8000) stateSoon();
+        // 처음 왔거나, 화면 정보가 없거나, 받은 화면이 옛것이면 다시 알려 줘요
+        var stale = typeof m.s === 'number' ? m.s < S.seq : follow;
+        if (m.need || first || stale) askState();
         updCount(); return;
       }
       if (m.t !== 'ans') return;
       var it = curItem();
-      if (!it || m.qid !== it.qid || !S.open) { net.send({ t: 'nack', sid: m.sid, qid: m.qid }); return; }
+      if (!it || m.qid !== it.qid || !S.open) { ack(false, m.sid, m.qid); return; }
       var v = m.v;
       if (it.type === 'choice') { v = Number(v); if (!(v >= 0 && v < it.options.length && v === Math.floor(v))) return; }
       else { v = String(v == null ? '' : v).replace(/\s+$/, '').slice(0, MAX_TEXT); if (!v.trim()) return; }
@@ -913,16 +930,19 @@
       var prev = A[m.sid];
       A[m.sid] = { v: v, c: cls, n: num, t: now, h: prev && prev.v === v ? prev.h : false, isNew: !prev };
       save();
-      net.send({ t: 'ack', sid: m.sid, qid: it.qid });
+      ack(true, m.sid, it.qid);
       updCount(); renderList();
       scheduleRes();
     }
     var resTimer = null;
     function scheduleRes() { if (resTimer) return; resTimer = setTimeout(function () { resTimer = null; renderStage(); }, 250); }
-    function updCount() {
+    function liveCount() {
       var now = Date.now(), n = 0;
-      var keys = {};
-      for (var k in seen) if (now - seen[k] < 45000) { if (!keys[who[k] || k]) { keys[who[k] || k] = 1; n++; } } else { delete seen[k]; delete who[k]; }
+      for (var k in seen) if (now - seen[k] < ALIVE) n++;
+      return n;
+    }
+    function updCount() {
+      var n = liveCount();
       cnt.textContent = fabCnt.textContent = n;
       qrCnt.textContent = '들어온 학생 ' + n + '명';
     }
@@ -1204,8 +1224,6 @@
     function overlayOn() { return !root.classList.contains('lv-hide'); }
     var sid = SS.get('lv-sid', null);
     if (!sid) { sid = rand(10); SS.set('lv-sid', sid); }
-    var dev = LS.get('lv-dev', null);                   // 이 기기(크롬북) 번호: 탭이 여러 개여도 학생 수는 한 명으로
-    if (!dev) { dev = rand(10); LS.set('lv-dev', dev); }
     var me = LS.get('lv-me', { c: '', n: '' });
     var code = (q.get('join') || '').replace(/\D/g, '').slice(0, 6);
     var cfg = null, pub = q.get('p') || null;
@@ -1236,7 +1254,7 @@
     root.appendChild(h('div', { class: 'lv-copy', text: COPY }));
 
     var lastView = null, locked = false;   // backBtn은 위에서 이미 만들었어요
-    var net = null, verify = null, lastSeq = 0, lastGo = 0, popped = '', state = null, gotState = false, myAns = SS.get('lv-my:' + code, {}), pending = null, hiTimer = null;
+    var net = null, verify = null, lastSeq = 0, lastGo = 0, popped = '', state = null, gotState = false, myAns = SS.get('lv-my:' + code, {}), pending = null, hiTimer = null, hiWait = 0;
 
     function screen(kids) { body.innerHTML = ''; kids.forEach(function (k) { if (k) body.appendChild(k); }); }
 
@@ -1290,20 +1308,25 @@
     function join() {
       waiting('연결하는 중…', '잠깐만 기다려 주세요');
       var p = (pub && HAS_CRYPTO) ? verifier(pub).then(function (f) { verify = f; }).catch(function () { verify = null; }) : Promise.resolve();
-      p.then(function () { return connect(cfg, code, onMsg, setStatus); })
-        .then(function (n) {
-          net = n; hello();
-          window.addEventListener('pagehide', function () { try { net && net.send({ t: 'bye', sid: sid }); } catch (e) {} });
-        }, function () { setStatus('err'); waiting('연결이 안 돼요', '인터넷 연결을 확인하고 새로 고침 해 주세요'); });
+      p.then(function () { return connect(cfg, code, onMsg, setStatus, 's'); })
+        .then(function (n) { net = n; hello(); }, function () { setStatus('err'); waiting('연결이 안 돼요', '인터넷 연결을 확인하고 새로 고침 해 주세요'); });
     }
+    // "들어왔어요" 신호: 화면 정보를 받기 전엔 2→4→8…초(최대 30초), 받은 뒤엔 60초마다
     function hello() {
       clearTimeout(hiTimer);
-      if (net) net.send({ t: 'hi', sid: sid, d: cfg && cfg.demo ? '' : dev, c: me.c, n: me.n, need: !gotState });
-      hiTimer = setTimeout(hello, gotState ? 15000 : 2000);
+      if (net) net.send({ t: 'hi', sid: sid, c: me.c, n: me.n, need: !gotState, s: lastSeq });
+      hiWait = gotState ? HI_EVERY : Math.min(30000, hiWait ? hiWait * 2 : 2000);
+      hiTimer = setTimeout(hello, hiWait);
     }
     function setStatus(st) {
       dot.className = fabDot.className = 'lv-dot ' + st;
-      if (st === 'ok') { gotState = false; hello(); if (!state) waiting('선생님을 기다리는 중', '선생님 화면과 연결하고 있어요'); }
+      if (st === 'ok') { gotState = false; hiWait = 0; hello(); if (!state) waiting('선생님을 기다리는 중', '선생님 화면과 연결하고 있어요'); }
+    }
+    function gotAck(t, qid) {
+      if (!pending || pending.qid !== qid) return;
+      clearTimeout(pending.tm); pending = null;
+      if (t === 'ack') { myAns[qid] = myAns[qid] || {}; myAns[qid].ok = true; SS.set('lv-my:' + code, myAns); stat('선생님께 도착했어요 ✓  (다시 고쳐 보낼 수 있어요)', 'ok'); }
+      else stat('지금은 답을 받지 않아요', 'bad');
     }
     function onMsg(m) {
       if (!m || typeof m !== 'object') return;
@@ -1337,11 +1360,10 @@
           }
           ping();
         });
+      } else if (m.t === 'acks' && Array.isArray(m.a)) {   // 모아서 온 도착 확인
+        for (var i = 0; i < m.a.length; i++) { var x = m.a[i]; if (x && x[1] === sid) gotAck(x[0] ? 'ack' : 'nack', x[2]); }
       } else if ((m.t === 'ack' || m.t === 'nack') && m.sid === sid) {
-        if (!pending || pending.qid !== m.qid) return;
-        clearTimeout(pending.tm); pending = null;
-        if (m.t === 'ack') { myAns[m.qid] = myAns[m.qid] || {}; myAns[m.qid].ok = true; SS.set('lv-my:' + code, myAns); stat('선생님께 도착했어요 ✓  (다시 고쳐 보낼 수 있어요)', 'ok'); }
-        else stat('지금은 답을 받지 않아요', 'bad');
+        gotAck(m.t, m.qid);
       }
     }
 
